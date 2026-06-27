@@ -383,19 +383,6 @@ function calibrate(p){ if(p>=100)return 100; if(p<=0)return 0; const x=p/100;
   return 100/(1+Math.exp(-CAL_SHRINK*Math.log(x/(1-x)))); }
 function displayPct(R,p){ return R.clinched?100:R.eliminated?0:calibrate(p); }
 
-/* Is a pending group's *provisional* 3rd-placed team (given the current live scores) better or worse than Iran?
-   worse → "good" for Iran (this group isn't a threat); better → "bad" (its third would bump Iran); tie → "neu". */
-function groupFav(G, ip, igd, igf){
-  const P=G.bp.slice(), GD=G.bgd.slice(), GF=G.bgf.slice();
-  for(const m of G.nf){ const gh=m.hs, ga=m.as;
-    GF[m.hi]+=gh; GD[m.hi]+=gh-ga; GF[m.ai]+=ga; GD[m.ai]+=ga-gh;
-    if(gh>ga) P[m.hi]+=3; else if(gh<ga) P[m.ai]+=3; else { P[m.hi]++; P[m.ai]++; } }
-  const o=[...Array(G.n).keys()].sort((a,b)=>P[b]-P[a]||GD[b]-GD[a]||GF[b]-GF[a]), ti=o[2];
-  const above = P[ti]>ip || (P[ti]===ip && (GD[ti]>igd || (GD[ti]===igd && GF[ti]>igf)));
-  const tie   = P[ti]===ip && GD[ti]===igd && GF[ti]===igf;
-  return tie?"neu":above?"bad":"good";
-}
-
 /* Which result(s) of match k (index in G.nf) keep this group's provisional 3rd from finishing ABOVE Iran —
    i.e. the outcome(s) Iran should root for. Other matches held at their current live score.
    Returns a subset of "HDA" (Home win / Draw / Away win). */
@@ -495,12 +482,10 @@ function render(R,pct,dist){
   const pend=new Set(R.pending);
   const kick=m=>{const d=new Date(m.date),now=new Date(),t=d.toLocaleTimeString([],{hour:'numeric',minute:'2-digit'});
     return d.toDateString()===now.toDateString()?t:d.toLocaleDateString([],{weekday:'short'})+" "+t;};
-  // favourability of each still-live group's current scoreline to Iran (only while Iran's fate is undecided)
-  const favMap={}, PGby={}; if(!decided) for(const G of (R.PG||[])){ favMap[G.gp]=groupFav(G,R.ip,R.igd,R.igf); PGby[G.gp]=G; }
-  const FAVI={good:"▲ good for 🇮🇷",bad:"▼ bad for 🇮🇷",neu:"● neutral"},
-        FAVT={good:"As it stands, this group's 3rd-placed team would finish BELOW Iran — good for Iran's chances.",
-              bad:"As it stands, this group's 3rd-placed team would finish ABOVE Iran — hurts Iran's chances.",
-              neu:"As it stands, this group's 3rd-placed team is level with Iran — too close to call."};
+  const PGby={}; if(!decided) for(const G of (R.PG||[])) PGby[G.gp]=G;
+  const FAVI={good:"▲ on track",bad:"▼ wrong way"},
+        FAVT={good:"The current score in THIS game is a result Iran want (see the 🎯 hint).",
+              bad:"The current score in THIS game is NOT what Iran want — they need the 🎯 result instead."};
   $("#matchCard").innerHTML=board.slice(0,12).map(m=>{
     const gp=R.teamGroup[m.home], dec=gp&&pend.has(gp);
     const cl=m.state==="post"?"fin":m.state==="in"?"liv":"pre";
@@ -508,10 +493,8 @@ function render(R,pct,dist){
     const sc=m.state==="pre"?"–":A(m.link,scTxt);
     const status=m.state==="in"?A(WATCH,"▶ "+esc(m.detail)):m.state==="post"?A(m.link,"FT"):A(m.link,kick(m));
     const tag=gp?gp.replace("Group ","").trim():(new Date(m.date)>Date.now()?"R32":"");
-    const fav=(m.state==="in"&&dec&&!decided)?favMap[gp]:null;
-    const favChip=fav?`<span class="favind ${fav}" title="${FAVT[fav]}">${FAVI[fav]}</span>`:"";
-    // ideal outcome Iran should root for in this group fixture (live or upcoming, while undecided)
-    let ideal="";
+    // Per-match, while Iran's fate is undecided: the ideal result to root for + whether the current score matches it
+    let ideal="", favChip="";
     if(!decided && dec && (m.state==="in"||m.state==="pre")){
       const G=PGby[gp], k=G?G.nf.findIndex(x=>x.home===m.home&&x.away===m.away):-1;
       if(k>=0){
@@ -519,6 +502,11 @@ function render(R,pct,dist){
         const T={H:`${f}win`,D:"draw",A:`${a}win`,HD:`${f}win/draw`,DA:`${a}win/draw`,HA:"either win",HDA:"any result",
                  "":"no help here"}[s] ?? "any result";
         ideal=`<span class="ideal" title="The result here that keeps this group's 3rd-placed team from finishing above Iran (other games held at their current score)">🎯 ${T}</span>`;
+        // favourability = is the CURRENT score one of the results Iran want? (live games with leverage only)
+        if(m.state==="in" && s!=="" && s!=="HDA"){
+          const cur=m.hs>m.as?"H":m.hs<m.as?"A":"D", v=s.includes(cur)?"good":"bad";
+          favChip=`<span class="favind ${v}" title="${FAVT[v]}">${FAVI[v]}</span>`;
+        }
       }
     }
     return `<div class="match"${dec?' title="affects Iran"':''}>
