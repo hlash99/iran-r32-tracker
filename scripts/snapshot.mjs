@@ -177,9 +177,42 @@ async function computeFavorite(groups) {
       cur = nx;
     }
   }
-  let fav = null, fc = -1;
-  for (const t in wins) if (wins[t] > fc) { fc = wins[t]; fav = t; }
-  return fav ? { favorite: fav, favorite_pct: Math.round(fc / N * 100) } : null;
+  const champ = {}; for (const t in wins) champ[t] = wins[t] / N;   // model championship distribution
+  let fav = null, fc = -1; for (const t in wins) if (wins[t] > fc) { fc = wins[t]; fav = t; }
+  return fav ? { champ, favorite: fav, favorite_pct: Math.round(fc / N * 100) } : null;
+}
+
+const norm = s => (s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z]/g, "");
+// Live World Cup-winner odds from Kalshi's public API (de-vigged to a probability per team)
+async function fetchWinnerMarket() {
+  try {
+    const j = await fetch("https://api.elections.kalshi.com/trade-api/v2/markets?series_ticker=KXMENWORLDCUP&limit=100",
+      { headers: { "User-Agent": "Mozilla/5.0" } }).then(r => r.json());
+    const m = {};
+    for (const k of (j.markets || [])) {
+      const name = k.yes_sub_title || k.subtitle || "";
+      const lp = parseFloat(k.last_price_dollars), yb = parseFloat(k.yes_bid_dollars), ya = parseFloat(k.yes_ask_dollars);
+      const p = lp || ((yb && ya) ? (yb + ya) / 2 : 0);
+      if (name && p > 0) m[norm(name)] = p;
+    }
+    const s = Object.values(m).reduce((a, b) => a + b, 0);
+    if (s > 0) for (const k in m) m[k] /= s;
+    return Object.keys(m).length ? m : null;
+  } catch { return null; }
+}
+// Blend the model's championship distribution with the betting market (60% market / 40% model)
+function blendFavorite(favModel, market) {
+  if (!favModel) return null;
+  const model = favModel.champ;
+  if (!market) return { favorite: favModel.favorite, favorite_pct: favModel.favorite_pct,
+    favorite_pct_model: favModel.favorite_pct, favorite_pct_market: null };
+  const blended = {};
+  for (const t in model) blended[t] = 0.4 * model[t] + 0.6 * (market[norm(t)] || 0);
+  const s = Object.values(blended).reduce((a, b) => a + b, 0); if (s > 0) for (const t in blended) blended[t] /= s;
+  let bf = null, bp = -1; for (const t in blended) if (blended[t] > bp) { bp = blended[t]; bf = t; }
+  return { favorite: bf, favorite_pct: Math.round(bp * 100),
+    favorite_pct_model: Math.round((model[bf] || 0) * 100),
+    favorite_pct_market: Math.round((market[norm(bf)] || 0) * 100) };
 }
 
 async function main() {
@@ -210,7 +243,8 @@ async function main() {
   const status = R.clinched ? "advanced" : R.eliminated ? "eliminated"
     : R.allFinal ? (R.pct >= 50 ? "advanced" : "eliminated") : "live";
   const shown = Math.round(displayPct(R));   // calibrated, snaps to 100/0 when clinched/eliminated
-  const fav = await computeFavorite(groups);   // most-likely WC winner (null until R32 is set)
+  const [favModel, market] = await Promise.all([computeFavorite(groups), fetchWinnerMarket()]);
+  const fav = blendFavorite(favModel, market);   // WC winner: model blended with Kalshi odds (null until R32 set)
 
   const prev = JSON.parse(readFileSync(join(ROOT, "data.json"), "utf8"));
   const out = {
@@ -229,6 +263,8 @@ async function main() {
     next_confirmed: next ? next.confirmed : null,
     favorite: fav ? fav.favorite : null,
     favorite_pct: fav ? fav.favorite_pct : null,
+    favorite_pct_model: fav ? fav.favorite_pct_model : null,
+    favorite_pct_market: fav ? fav.favorite_pct_market : null,
     live: true,
     source: "ESPN public feed (standings + scoreboard); recomputed server-side by scripts/snapshot.mjs",
   };

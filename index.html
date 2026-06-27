@@ -168,10 +168,6 @@
       <div class="card" id="bracketCard"><div class="err">loading bracket…</div></div>
     </section>
 
-    <section class="block" data-block="dist"><span class="grip" draggable="true" title="Drag to reorder">⠿</span>
-      <h2>How many third-place teams finish above Iran?</h2>
-      <div class="card"><div class="dist" id="dist"></div><div class="legend" id="distLegend"></div></div>
-    </section>
   </div>
 
   <footer id="foot"></footer>
@@ -191,7 +187,7 @@ const esc=s=>(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/"/g,"&q
 const A=(href,txt,cls)=>href?`<a href="${esc(href)}" target="_blank" rel="noopener"${cls?` class="${cls}"`:""}>${txt}</a>`:txt;
 const FLAG={"Algeria":"🇩🇿","Argentina":"🇦🇷","Australia":"🇦🇺","Austria":"🇦🇹","Belgium":"🇧🇪","Bosnia-Herzegovina":"🇧🇦","Brazil":"🇧🇷","Canada":"🇨🇦","Cape Verde":"🇨🇻","Colombia":"🇨🇴","Congo DR":"🇨🇩","Croatia":"🇭🇷","Curaçao":"🇨🇼","Czechia":"🇨🇿","Ecuador":"🇪🇨","Egypt":"🇪🇬","England":"🏴󠁧󠁢󠁥󠁮󠁧󠁿","France":"🇫🇷","Germany":"🇩🇪","Ghana":"🇬🇭","Haiti":"🇭🇹","Iran":"🇮🇷","Iraq":"🇮🇶","Ivory Coast":"🇨🇮","Japan":"🇯🇵","Jordan":"🇯🇴","Mexico":"🇲🇽","Morocco":"🇲🇦","Netherlands":"🇳🇱","New Zealand":"🇳🇿","Norway":"🇳🇴","Panama":"🇵🇦","Paraguay":"🇵🇾","Portugal":"🇵🇹","Qatar":"🇶🇦","Saudi Arabia":"🇸🇦","Scotland":"🏴󠁧󠁢󠁳󠁣󠁴󠁿","Senegal":"🇸🇳","South Africa":"🇿🇦","South Korea":"🇰🇷","Spain":"🇪🇸","Sweden":"🇸🇪","Switzerland":"🇨🇭","Tunisia":"🇹🇳","Türkiye":"🇹🇷","Turkey":"🇹🇷","United States":"🇺🇸","USA":"🇺🇸","Uruguay":"🇺🇾","Uzbekistan":"🇺🇿"};
 const flag=name=>FLAG[name]?FLAG[name]+" ":"";
-let timer=null, lastStamp=0, feedOk=true, pendingLive=false, mcRun=0, nextInfo=undefined, iranState="live", KO=[];
+let timer=null, lastStamp=0, feedOk=true, pendingLive=false, mcRun=0, nextInfo=undefined, iranState="live", KO=[], SRV=null;
 
 /* live "grabbed Xs ago" badge — ticks every second, flags staleness */
 function updateLiveBadge(){
@@ -342,8 +338,8 @@ function buildGauge(){
     ${bands}
     <path d="M${cx-rbi} ${cy} A ${rbi} ${rbi} 0 0 1 ${cx+rbi} ${cy} Z" fill="var(--surface)"/>
     ${ticks}${labels}
-    <text x="40" y="204" font-size="12" font-weight="700" fill="${rgba(RED,.95)}" text-anchor="middle">OUT</text>
-    <text x="360" y="204" font-size="12" font-weight="700" fill="${rgba(GRN,.95)}" text-anchor="middle">IN</text>
+    <text id="gL" x="40" y="204" font-size="12" font-weight="700" fill="${rgba(RED,.95)}" text-anchor="middle">OUT</text>
+    <text id="gR" x="360" y="204" font-size="12" font-weight="700" fill="${rgba(GRN,.95)}" text-anchor="middle">IN</text>
     <g id="ndl">
       <polygon points="${cx-6.5},${cy} ${cx+6.5},${cy} ${cx+1.4},${cy-GG.nlen} ${cx-1.4},${cy-GG.nlen}" fill="${NEEDLE}"/>
       <circle cx="${cx}" cy="${cy-GG.nlen}" r="2.6" fill="${NEEDLE}"/>
@@ -359,10 +355,12 @@ function needleTick(){
   const now=Date.now(), jit=GG.jit*(0.7*Math.sin(now/130)+0.3*Math.sin(now/47));
   ndl.setAttribute('transform',`rotate(${(GG.cur+jit).toFixed(2)} ${GG.cx} ${GG.cy})`);
 }
-function setGauge(pct,allFinal,clinch){
+function setGauge(pct,allFinal,clinch,ends){
   if(!GG.built) buildGauge();
   GG.tgt=(pct-50)/50*90;                                    // -90° (0%) … +90° (100%)
   GG.jit=allFinal?0:Math.min(8,1.2+0.075*Math.sqrt(pct*(100-pct)));   // nervous while live
+  const e=ends||["OUT","IN"]; const gL=document.getElementById('gL'), gR=document.getElementById('gR');
+  if(gL)gL.textContent=e[0]; if(gR)gR.textContent=e[1];
   const col=pct>=66?"var(--green)":pct>=38?"var(--amber)":"var(--red)";
   document.getElementById('gcap').innerHTML=`<div class="n" style="color:${col}">${pct>=99.5?100:pct<=0.5?0:Math.round(pct)}%</div>
     <div class="l">${clinch||"chance to advance"}</div>`;
@@ -380,22 +378,27 @@ function displayPct(R,p){ return R.clinched?100:R.eliminated?0:calibrate(p); }
 function render(R,pct,dist){
   const ir=R.iran;
   const decided = R.clinched?"in" : R.eliminated?"out" : (R.allFinal?(pct>=50?"in":"out"):null);
-  const shown = displayPct(R,pct);
-  const clinch = decided==="in"?"QUALIFIED ✓" : decided==="out"?"ELIMINATED" : null;
-  setGauge(shown, !!decided, clinch);
-  const st = decided==="in"?["Through to the Round of 32","var(--green)"]
-           : decided==="out"?["Eliminated","var(--red)"]
-           : shown>=66?["In control","var(--green)"]:shown>=38?["On the bubble","var(--amber)"]:["Sweating it","var(--red)"];
-  const note = R.clinched?`Iran have <b>clinched</b> a Round-of-32 spot — confirmed before the group stage even finished.`
-    : R.eliminated?`Iran are <b>out</b> — ${R.baseAbove} third-placed teams finished above them.`
-    : R.allFinal?"All groups are final."
-    : `Iran are out only if <b>all ${R.pending.length}</b> still-live group${R.pending.length>1?"s":""} (${R.pending.join(", ")}) produce a third better than Iran's record${R.pending.length>1?` — Iran clinch the moment any one of those groups doesn't`:""}.`;
-  $("#verdict").innerHTML=`<h3 style="color:${st[1]}">${st[0]}</h3>
-    <p>Iran finished Group G 3rd on <b>${ir.pts} pts · ${ir.gd>=0?"+":""}${ir.gd} GD · ${ir.gf} GF</b>, currently
-    <b>${R.iranPos}${["","st","nd","rd"][R.iranPos]||"th"}</b> of the 12 third-placed teams. ${note}</p>
-    <div class="pills"><span class="pill"><b>${SLOTS}</b> thirds advance</span>
-      <span class="pill"><b>${R.baseAbove}</b> locked above</span>
-      <span class="pill"><b>${R.pending.length}</b> group${R.pending.length!==1?"s":""} live</span></div>`;
+  const fav = (decided==="out" && SRV && SRV.favorite) ? SRV : null;
+  if(fav){
+    // Iran out → the meter pivots to the World Cup title favorite (market-blended, computed server-side)
+    setGauge(fav.favorite_pct, true, "🏆 "+esc(fav.favorite), ["0%","100%"]);
+    $("#verdict").innerHTML=`<p>🇮🇷 Iran were <b>eliminated</b> in the group stage — the meter now tracks the <b>World Cup title favorite</b>:</p>
+      <p style="font-size:17px;margin:8px 0 2px"><b>${flag(fav.favorite)}${esc(fav.favorite)}</b> · <b style="color:var(--green)">${fav.favorite_pct}%</b> to win the World Cup</p>
+      <div class="pills">${fav.favorite_pct_model!=null?`<span class="pill">model ${fav.favorite_pct_model}%</span>`:""}${fav.favorite_pct_market!=null?`<span class="pill">market ${fav.favorite_pct_market}%</span>`:""}<span class="pill">blended ${fav.favorite_pct}%</span></div>`;
+  } else {
+    const shown = displayPct(R,pct);
+    const clinch = decided==="in"?"QUALIFIED ✓" : decided==="out"?"ELIMINATED" : null;
+    setGauge(shown, !!decided, clinch, ["OUT","IN"]);
+    const note = R.clinched?`Iran have <b>clinched</b> a Round-of-32 spot — confirmed before the group stage even finished.`
+      : R.eliminated?`Iran are <b>out</b> — ${R.baseAbove} third-placed teams finished above them.`
+      : R.allFinal?"All groups are final."
+      : `Iran are out only if <b>all ${R.pending.length}</b> still-live group${R.pending.length>1?"s":""} (${R.pending.join(", ")}) produce a third better than Iran's record${R.pending.length>1?` — Iran clinch the moment any one of those groups doesn't`:""}.`;
+    $("#verdict").innerHTML=`<p>Iran finished Group G 3rd on <b>${ir.pts} pts · ${ir.gd>=0?"+":""}${ir.gd} GD · ${ir.gf} GF</b>, currently
+      <b>${R.iranPos}${["","st","nd","rd"][R.iranPos]||"th"}</b> of the 12 third-placed teams. ${note}</p>
+      <div class="pills"><span class="pill"><b>${SLOTS}</b> thirds advance</span>
+        <span class="pill"><b>${R.baseAbove}</b> locked above</span>
+        <span class="pill"><b>${R.pending.length}</b> group${R.pending.length!==1?"s":""} live</span></div>`;
+  }
 
   // third-place table (top 10)
   const rows=R.ranked.slice(0,10).map((r,i)=>{
@@ -441,19 +444,6 @@ function render(R,pct,dist){
   const h1=iranState==="in"?"Iran — Into the Round of 32 ✓":iranState==="out"?"Iran — Out in the group stage":"Iran — Round-of-32 Watch";
   $("#h1").innerHTML=`<span class="flag">🇮🇷</span> ${h1}`;
   document.title=iranState==="in"?"🇮🇷 Iran are THROUGH ✓":iranState==="out"?"Iran — eliminated":`Iran R32: ${Math.round(shown)}%`;
-
-  // distribution of # thirds above Iran (Iran in if < 8)
-  const d=dist; const maxk=Math.max(2, d.reduce((m,v,i)=>v>0.001?i:m,0));
-  const showFrom=Math.max(0,R.baseAbove-0);
-  let bars="";
-  for(let k=showFrom;k<=Math.min(maxk+1,12);k++){
-    const adv=k<SLOTS, v=d[k]||0;
-    bars+=`<div class="bar"><div class="bp" style="color:${adv?'var(--green)':'var(--red)'}">${v>=0.005?Math.round(v*100)+"%":""}</div>
-      <div class="b" style="height:${Math.max(2,v* (96-18)/Math.max(...d))}px;background:${adv?'var(--green)':'var(--red)'}"></div>
-      <div class="bl">${k}</div></div>`;
-  }
-  $("#dist").innerHTML=bars;
-  $("#distLegend").innerHTML=`X-axis = total third-placed teams finishing above Iran. <b style="color:var(--green)">Green</b> (≤7) = Iran top-8 & advances; <b style="color:var(--red)">red</b> (8+) = out. Raw model = green total = <b>${Math.round(pct)}%</b>; the gauge shows <b>${Math.round(shown)}%</b> after tempering toward market consensus.`;
 
   // footer
   $("#foot").innerHTML=`Live group tables & scores from ESPN's public feed, pulled in your browser every 60s. Probability via ${SIMS.toLocaleString()}-run Monte-Carlo of the remaining group matches, then tempered toward betting-market consensus (Kalshi/Polymarket) so it isn't over-optimistic. The gauge snaps to 100% / 0% the instant Iran are mathematically clinched or eliminated — it doesn't wait for the final game.<br>
@@ -578,6 +568,9 @@ async function refresh(){
 }
 refresh(); timer=setInterval(refresh,60000);
 fetchNext(); setInterval(fetchNext,60000);      // bracket + next-up auto-refresh every minute too
+/* server snapshot (favorite + market-blended title odds, computed in the Action) — used when Iran are out */
+async function fetchServer(){ try{ const d=await fetch("data.json?_="+Date.now()).then(r=>r.json()); if(d&&typeof d==="object"){ SRV=d; if(iranState==="out") refresh(); } }catch(e){} }
+fetchServer(); setInterval(fetchServer,120000);
 
 /* scale the knockout bracket to fit the card width — no horizontal scroll, any screen size */
 function fitBracket(){
