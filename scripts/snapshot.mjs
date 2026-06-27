@@ -101,7 +101,16 @@ function compute(groups, matches) {
     }
     if (above < SLOTS) advance++;
   }
-  return { iran, iranPos, pending, baseAbove, pct: advance / SIMS * 100, allFinal: pending.length === 0 };
+  const clinched = baseAbove + pending.length <= SLOTS - 1;   // top-8 guaranteed even in the worst case
+  const eliminated = baseAbove >= SLOTS;                       // already 8 thirds above Iran
+  return { iran, iranPos, pending, baseAbove, clinched, eliminated, pct: advance / SIMS * 100, allFinal: pending.length === 0 };
+}
+// match the page: temper the over-confident model toward betting-market consensus, snap to 100/0 when decided
+const CAL_SHRINK = 0.45;
+function displayPct(R) {
+  if (R.clinched) return 100; if (R.eliminated) return 0;
+  const p = R.pct; if (p >= 100) return 100; if (p <= 0) return 0;
+  const x = p / 100; return 100 / (1 + Math.exp(-CAL_SHRINK * Math.log(x / (1 - x))));
 }
 
 async function findNext() {
@@ -198,7 +207,9 @@ async function main() {
   const matches = parseScore(sbJ);
   const R = compute(groups, matches);
   const next = R.allFinal && R.pct < 50 ? null : await findNext();
-  const status = R.allFinal ? (R.pct >= 50 ? "advanced" : "eliminated") : "live";
+  const status = R.clinched ? "advanced" : R.eliminated ? "eliminated"
+    : R.allFinal ? (R.pct >= 50 ? "advanced" : "eliminated") : "live";
+  const shown = Math.round(displayPct(R));   // calibrated, snaps to 100/0 when clinched/eliminated
   const fav = await computeFavorite(groups);   // most-likely WC winner (null until R32 is set)
 
   const prev = JSON.parse(readFileSync(join(ROOT, "data.json"), "utf8"));
@@ -206,8 +217,9 @@ async function main() {
     ...prev,
     updated: new Date().toISOString().replace(/\.\d+Z$/, "Z"),
     server_updated: new Date().toISOString().replace(/\.\d+Z$/, "Z"),
-    iran_pct: Math.round(R.pct),
-    baseline_pct: Math.round(R.pct),
+    iran_pct: shown,
+    baseline_pct: shown,
+    iran_pct_raw: Math.round(R.pct),
     iran_pos: R.iranPos,
     locked_above: R.baseAbove,
     pending_groups: R.pending.map(g => g.replace("Group ", "")),

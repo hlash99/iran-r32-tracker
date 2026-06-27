@@ -85,7 +85,8 @@
   .bar .bp{font-size:11px;font-weight:600}
   .legend{font-size:12px;color:var(--muted);margin-top:8px}
   /* knockout bracket */
-  .bracket{display:flex;gap:22px;overflow-x:auto;padding:2px 2px 8px;-webkit-overflow-scrolling:touch;align-items:stretch}
+  .bwrap{width:100%;overflow:hidden}
+  .bracket{display:flex;gap:22px;width:max-content;padding:2px 2px 8px;align-items:stretch;transform-origin:top left}
   .bround{display:flex;flex-direction:column;min-width:106px;flex:none}
   .bround .rh{font-size:9.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);text-align:center;font-weight:700;height:12px;margin-bottom:4px}
   .brd{flex:1;display:flex;flex-direction:column}
@@ -278,8 +279,13 @@ function compute(groups, matches){
             P:new Array(n),GD:new Array(n),GF:new Array(n),ord:ts.map((_,i)=>i),nf};
   });
   const baseAbove= thirds.filter(r=>r.done && r.t.team!==IRAN && aboveIran(r.t,iran)).length;
+  // Deterministic early outcomes (don't wait for the last game):
+  //  • clinched  — even if every still-live group produces a third better than Iran, Iran stays top-8
+  //  • eliminated — 8 thirds are already locked above Iran
+  const clinched   = baseAbove + pending.length <= SLOTS-1;
+  const eliminated = baseAbove >= SLOTS;
   return {iran,iranPos,ranked,pending,liveMatches,matchByGroup,teamGroup,allMatches:matches,
-          ip,igd,igf,PG,baseAbove, allFinal:pending.length===0};
+          ip,igd,igf,PG,baseAbove, clinched, eliminated, allFinal:pending.length===0};
 }
 
 /* Monte-Carlo of the remaining matches, chunked across timeouts so 100k runs never block the needle */
@@ -362,18 +368,31 @@ function setGauge(pct,allFinal,clinch){
     <div class="l">${clinch||"chance to advance"}</div>`;
 }
 
+/* The raw Monte-Carlo runs over-confident vs the betting markets (Kalshi/Polymarket ~70–75%
+   at the time of writing). This logit-shrink tempers it toward 50 so the gauge isn't misleadingly
+   rosy; it snaps to exactly 100/0 once Iran has mathematically clinched or been eliminated. */
+const CAL_SHRINK=0.45;
+function calibrate(p){ if(p>=100)return 100; if(p<=0)return 0; const x=p/100;
+  return 100/(1+Math.exp(-CAL_SHRINK*Math.log(x/(1-x)))); }
+function displayPct(R,p){ return R.clinched?100:R.eliminated?0:calibrate(p); }
+
 /* ── render ── */
 function render(R,pct,dist){
   const ir=R.iran;
-  const clinch=R.allFinal?(pct>=50?"QUALIFIED ✓":"ELIMINATED"):null;
-  setGauge(pct,R.allFinal,clinch);
-  const st=R.allFinal?(pct>=50?["Through to the Round of 32","var(--green)"]:["Eliminated","var(--red)"])
-        :pct>=66?["In control","var(--green)"]:pct>=38?["On the bubble","var(--amber)"]:["Sweating it","var(--red)"];
+  const decided = R.clinched?"in" : R.eliminated?"out" : (R.allFinal?(pct>=50?"in":"out"):null);
+  const shown = displayPct(R,pct);
+  const clinch = decided==="in"?"QUALIFIED ✓" : decided==="out"?"ELIMINATED" : null;
+  setGauge(shown, !!decided, clinch);
+  const st = decided==="in"?["Through to the Round of 32","var(--green)"]
+           : decided==="out"?["Eliminated","var(--red)"]
+           : shown>=66?["In control","var(--green)"]:shown>=38?["On the bubble","var(--amber)"]:["Sweating it","var(--red)"];
+  const note = R.clinched?`Iran have <b>clinched</b> a Round-of-32 spot — confirmed before the group stage even finished.`
+    : R.eliminated?`Iran are <b>out</b> — ${R.baseAbove} third-placed teams finished above them.`
+    : R.allFinal?"All groups are final."
+    : `Iran are out only if <b>all ${R.pending.length}</b> still-live group${R.pending.length>1?"s":""} (${R.pending.join(", ")}) produce a third better than Iran's record${R.pending.length>1?` — Iran clinch the moment any one of those groups doesn't`:""}.`;
   $("#verdict").innerHTML=`<h3 style="color:${st[1]}">${st[0]}</h3>
     <p>Iran finished Group G 3rd on <b>${ir.pts} pts · ${ir.gd>=0?"+":""}${ir.gd} GD · ${ir.gf} GF</b>, currently
-    <b>${R.iranPos}${["","st","nd","rd"][R.iranPos]||"th"}</b> of the 12 third-placed teams. ${R.allFinal?
-      "All groups are final.":`Iran is eliminated only if <b>all ${R.pending.length}</b> still-live group${R.pending.length>1?"s":""}
-      (${R.pending.join(", ")}) produce a third-place team better than Iran's record.`}</p>
+    <b>${R.iranPos}${["","st","nd","rd"][R.iranPos]||"th"}</b> of the 12 third-placed teams. ${note}</p>
     <div class="pills"><span class="pill"><b>${SLOTS}</b> thirds advance</span>
       <span class="pill"><b>${R.baseAbove}</b> locked above</span>
       <span class="pill"><b>${R.pending.length}</b> group${R.pending.length!==1?"s":""} live</span></div>`;
@@ -417,11 +436,11 @@ function render(R,pct,dist){
       <span class="tm">${flag(m.home)}${A(m.hlink,esc(m.home))} <span style="color:var(--muted)">v</span> ${flag(m.away)}${A(m.alink,esc(m.away))}</span>
       <span class="sc">${sc}</span><span class="st ${cl}" style="width:auto;text-align:right">${status}</span></div>`;}).join("")
     || `<div class="err">No matches in the current window — the tournament may be between rounds.</div>`;
-  iranState=R.allFinal?(pct>=50?"in":"out"):"live"; renderNext();
-  // dynamic heading + browser-tab title
+  iranState = R.clinched?"in" : R.eliminated?"out" : (R.allFinal?(pct>=50?"in":"out"):"live"); renderNext();
+  // dynamic heading + browser-tab title (flips the moment Iran clinch/are eliminated — no need to wait for the last game)
   const h1=iranState==="in"?"Iran — Into the Round of 32 ✓":iranState==="out"?"Iran — Out in the group stage":"Iran — Round-of-32 Watch";
   $("#h1").innerHTML=`<span class="flag">🇮🇷</span> ${h1}`;
-  document.title=iranState==="in"?"🇮🇷 Iran are THROUGH ✓":iranState==="out"?"Iran — eliminated":`Iran R32: ${Math.round(pct)}%`;
+  document.title=iranState==="in"?"🇮🇷 Iran are THROUGH ✓":iranState==="out"?"Iran — eliminated":`Iran R32: ${Math.round(shown)}%`;
 
   // distribution of # thirds above Iran (Iran in if < 8)
   const d=dist; const maxk=Math.max(2, d.reduce((m,v,i)=>v>0.001?i:m,0));
@@ -434,10 +453,10 @@ function render(R,pct,dist){
       <div class="bl">${k}</div></div>`;
   }
   $("#dist").innerHTML=bars;
-  $("#distLegend").innerHTML=`X-axis = total third-placed teams finishing above Iran. <b style="color:var(--green)">Green</b> (≤7) = Iran top-8 & advances; <b style="color:var(--red)">red</b> (8+) = out. Iran's chance = green total = <b>${Math.round(pct)}%</b>.`;
+  $("#distLegend").innerHTML=`X-axis = total third-placed teams finishing above Iran. <b style="color:var(--green)">Green</b> (≤7) = Iran top-8 & advances; <b style="color:var(--red)">red</b> (8+) = out. Raw model = green total = <b>${Math.round(pct)}%</b>; the gauge shows <b>${Math.round(shown)}%</b> after tempering toward market consensus.`;
 
   // footer
-  $("#foot").innerHTML=`Live group tables & scores from ESPN's public feed, pulled in your browser every 60s. Probability via ${SIMS.toLocaleString()}-run Monte-Carlo of the remaining group matches (Poisson goal model, form-weighted), run in non-blocking chunks. Iran's 3 pts / 0 GD / 3 GF is locked; it advances unless 8+ thirds finish above it.<br>
+  $("#foot").innerHTML=`Live group tables & scores from ESPN's public feed, pulled in your browser every 60s. Probability via ${SIMS.toLocaleString()}-run Monte-Carlo of the remaining group matches, then tempered toward betting-market consensus (Kalshi/Polymarket) so it isn't over-optimistic. The gauge snaps to 100% / 0% the instant Iran are mathematically clinched or eliminated — it doesn't wait for the final game.<br>
     <a href="https://github.com/hlash99/iran-r32-tracker">source ↗</a> · not affiliated with FIFA or ESPN.`;
 }
 
@@ -514,12 +533,13 @@ function renderBracket(){
   const col=(slug,label,side,cls)=>{const ms=side==="F"?(byRound[slug]||[]):half(slug,side);if(!ms.length)return"";
     const sc=side==="L"?"bl":side==="R"?"br":"bf";
     return `<div class="bround ${sc} ${cls}"><div class="rh">${label}</div><div class="brd">${ms.map(e=>`<div class="mw">${bxHTML(e)}</div>`).join("")}</div></div>`;};
-  el.innerHTML=`<div class="bracket">
+  el.innerHTML=`<div class="bwrap"><div class="bracket">
       ${col("round-of-32","R32","L","feeds pairs")}${col("round-of-16","R16","L","feeds fed pairs")}${col("quarterfinals","QF","L","feeds fed pairs")}${col("semifinals","SF","L","feeds fed")}
       ${col("final","Final","F","")}
       ${col("semifinals","SF","R","feeds fed")}${col("quarterfinals","QF","R","feeds fed pairs")}${col("round-of-16","R16","R","feeds fed pairs")}${col("round-of-32","R32","R","feeds pairs")}
-    </div>
+    </div></div>
     <div class="legend" style="margin-top:4px">Live from ESPN · <b style="color:var(--amber)">gold</b> = Iran's path · two halves meet at the Final · scores update in real time.</div>`;
+  requestAnimationFrame(fitBracket); setTimeout(fitBracket,180);
 }
 
 /* run compute+MC+render for a parsed (groups,matches); guarded so a bad shape can't blank the page */
@@ -529,7 +549,7 @@ function process(groups, matches, stamp, ok){
   const myRun=++mcRun;
   runMC(R,(pct,dist)=>{ if(myRun!==mcRun) return;
     try{ render(R,pct,dist); }catch(err){ console.warn("render failed",err); }
-    localStorage.setItem("iranR32_live",JSON.stringify({pct:Math.round(pct),pos:R.iranPos,allFinal:R.allFinal,stamp})); });
+    localStorage.setItem("iranR32_live",JSON.stringify({pct:Math.round(displayPct(R,pct)),pos:R.iranPos,allFinal:R.allFinal||R.clinched||R.eliminated,stamp})); });
 }
 /* ── fetch loop (with a last-good cache + data.json fallback so an ESPN change can't break the page) ── */
 async function refresh(){
@@ -555,7 +575,19 @@ async function refresh(){
   }
 }
 refresh(); timer=setInterval(refresh,60000);
-fetchNext(); setInterval(fetchNext,240000);     // bracket changes slowly — every 4 min
+fetchNext(); setInterval(fetchNext,60000);      // bracket + next-up auto-refresh every minute too
+
+/* scale the knockout bracket to fit the card width — no horizontal scroll, any screen size */
+function fitBracket(){
+  const wrap=document.querySelector("#bracketCard .bwrap"); if(!wrap) return;
+  const br=wrap.querySelector(".bracket"); if(!br) return;
+  br.style.transform="none";
+  const nw=br.offsetWidth, nh=br.offsetHeight, avail=wrap.clientWidth;
+  const s=(nw&&avail)?Math.min(1, avail/nw):1;
+  br.style.transform="scale("+s+")";
+  wrap.style.height=(nh*s)+"px";
+}
+window.addEventListener("resize",()=>{clearTimeout(window._bf);window._bf=setTimeout(fitBracket,150);});
 
 /* keep the screen awake while the tracker is open (re-acquired when tab regains focus) */
 let wakeLock=null;
