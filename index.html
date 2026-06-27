@@ -80,6 +80,16 @@
   .match .sc{font-weight:750;font-size:15px;min-width:46px;text-align:center}
   .match .st{font-size:11px;width:78px;text-align:right;flex:none}
   .st.fin{color:var(--muted)} .st.liv{color:var(--amber);font-weight:600} .st.pre{color:var(--muted)}
+  .needhd{font-size:13.5px;color:var(--muted);line-height:1.5;padding:2px 2px 4px}
+  .needhd.good{color:var(--green);font-weight:700}  .needhd.bad{color:var(--red);font-weight:700}
+  .needrow{display:flex;align-items:center;gap:10px;padding:10px 4px;border-top:1px solid var(--line);font-size:14px}
+  .needrow .ni{flex:none;width:20px;text-align:center}
+  .needrow .ng{flex:none;width:38px;font-size:11px;color:var(--muted)}
+  .needrow .nt{flex:1;min-width:0}
+  .needrow .nsub{flex:none;font-size:11.5px;color:var(--muted);white-space:nowrap}
+  .needrow.met .nt{color:var(--green);font-weight:600}
+  .needrow.failed{opacity:.6}  .needrow.failed .nt{text-decoration:line-through;color:var(--muted)}
+  .nsub.ok{color:var(--green)}  .nsub.warn{color:var(--amber)}  .nsub.err{color:var(--red)}
   .favind{display:inline-block;margin-left:8px;font-size:10.5px;font-weight:800;padding:1px 7px;border-radius:999px;border:1px solid;white-space:nowrap;vertical-align:middle;cursor:help}
   .favind.good{color:var(--green);border-color:var(--green);background:rgba(74,222,128,.10)}
   .favind.bad{color:var(--red);border-color:var(--red);background:rgba(248,113,113,.10)}
@@ -155,6 +165,11 @@
       </div>
     </section>
 
+    <section class="block" data-block="needs"><span class="grip" draggable="true" title="Drag to reorder">⠿</span>
+      <h2>What needs to happen</h2>
+      <div class="card" id="needsCard"><div class="err">loading…</div></div>
+    </section>
+
     <section class="block" data-block="table"><span class="grip" draggable="true" title="Drag to reorder">⠿</span>
       <h2>Best third-placed teams — live table (top 8 advance)</h2>
       <div class="card" id="tableCard"><div class="err" id="tableMsg">loading…</div></div>
@@ -194,7 +209,7 @@ const esc=s=>(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/"/g,"&q
 const A=(href,txt,cls)=>href?`<a href="${esc(href)}" target="_blank" rel="noopener"${cls?` class="${cls}"`:""}>${txt}</a>`:txt;
 const FLAG={"Algeria":"🇩🇿","Argentina":"🇦🇷","Australia":"🇦🇺","Austria":"🇦🇹","Belgium":"🇧🇪","Bosnia-Herzegovina":"🇧🇦","Brazil":"🇧🇷","Canada":"🇨🇦","Cape Verde":"🇨🇻","Colombia":"🇨🇴","Congo DR":"🇨🇩","Croatia":"🇭🇷","Curaçao":"🇨🇼","Czechia":"🇨🇿","Ecuador":"🇪🇨","Egypt":"🇪🇬","England":"🏴󠁧󠁢󠁥󠁮󠁧󠁿","France":"🇫🇷","Germany":"🇩🇪","Ghana":"🇬🇭","Haiti":"🇭🇹","Iran":"🇮🇷","Iraq":"🇮🇶","Ivory Coast":"🇨🇮","Japan":"🇯🇵","Jordan":"🇯🇴","Mexico":"🇲🇽","Morocco":"🇲🇦","Netherlands":"🇳🇱","New Zealand":"🇳🇿","Norway":"🇳🇴","Panama":"🇵🇦","Paraguay":"🇵🇾","Portugal":"🇵🇹","Qatar":"🇶🇦","Saudi Arabia":"🇸🇦","Scotland":"🏴󠁧󠁢󠁳󠁣󠁴󠁿","Senegal":"🇸🇳","South Africa":"🇿🇦","South Korea":"🇰🇷","Spain":"🇪🇸","Sweden":"🇸🇪","Switzerland":"🇨🇭","Tunisia":"🇹🇳","Türkiye":"🇹🇷","Turkey":"🇹🇷","United States":"🇺🇸","USA":"🇺🇸","Uruguay":"🇺🇾","Uzbekistan":"🇺🇿"};
 const flag=name=>FLAG[name]?FLAG[name]+" ":"";
-let timer=null, lastStamp=0, feedOk=true, pendingLive=false, mcRun=0, nextInfo=undefined, iranState="live", KO=[], SRV=null, gamesLive=false, celebrated=false;
+let timer=null, lastStamp=0, feedOk=true, pendingLive=false, mcRun=0, nextInfo=undefined, iranState="live", KO=[], SRV=null, gamesLive=false, celebrated=false, deciderTxt={};
 
 /* live "grabbed Xs ago" badge — ticks every second, flags staleness */
 function updateLiveBadge(){
@@ -276,7 +291,7 @@ function compute(groups, matches){
     for(const m of (matchByGroup[gp]||[])) if(m.state!=="post"){
       const hi=idx[m.home], ai=idx[m.away]; if(hi==null||ai==null) continue;
       const left=Math.max(0,(90-m.min))/90, sh=strength[m.home]||1, sa=strength[m.away]||1;
-      nf.push({hi,ai,hs:m.hs,as:m.as,home:m.home,away:m.away,
+      nf.push({hi,ai,hs:m.hs,as:m.as,home:m.home,away:m.away,habbr:m.habbr,aabbr:m.aabbr,state:m.state,date:m.date,
         lh:1.35*left*Math.min(1.8,Math.max(.55,Math.exp(0.18*(sh-sa)))),
         la:1.35*left*Math.min(1.8,Math.max(.55,Math.exp(0.18*(sa-sh))))});
     }
@@ -399,6 +414,76 @@ function idealOutcome(G, k, ip, igd, igf){
   return (ok("H")?"H":"")+(ok("D")?"D":"")+(ok("A")?"A":"");
 }
 
+/* ── "what needs to happen" helpers ── */
+// third-place team (given a forced result combo across G.nf) finishes ≤ Iran?
+function thirdLEIran(G, combo, ip, igd, igf){
+  const P=G.bp.slice(), GD=G.bgd.slice(), GF=G.bgf.slice();
+  G.nf.forEach((mm,j)=>{ const r=combo[j], gh=r==="H"?1:0, ga=r==="A"?1:0;
+    GF[mm.hi]+=gh; GD[mm.hi]+=gh-ga; GF[mm.ai]+=ga; GD[mm.ai]+=ga-gh;
+    if(gh>ga) P[mm.hi]+=3; else if(gh<ga) P[mm.ai]+=3; else { P[mm.hi]++; P[mm.ai]++; } });
+  const o=[...Array(G.n).keys()].sort((a,b)=>P[b]-P[a]||GD[b]-GD[a]||GF[b]-GF[a]), ti=o[2];
+  return !(P[ti]>ip || (P[ti]===ip && (GD[ti]>igd || (GD[ti]===igd && GF[ti]>igf))));
+}
+function combos3(n){ if(n===0) return [[]]; const sub=combos3(n-1), out=[]; for(const c of sub) for(const r of ["H","D","A"]) out.push([r,...c]); return out; }
+// "met"  = every remaining result keeps the group's 3rd ≤ Iran (this group secures Iran)
+// "failed"= no remaining result can (this group can't help)   |  "live" = still in the balance
+function groupStatus(G, ip, igd, igf){
+  const cs=combos3(G.nf.length); let good=0;
+  for(const c of cs) if(thirdLEIran(G,c,ip,igd,igf)) good++;
+  return good===cs.length ? "met" : good===0 ? "failed" : "live";
+}
+// is the group's 3rd ≤ Iran at the CURRENT live score? (for the "on track right now" hint)
+function groupOnTrackNow(G, ip, igd, igf){
+  const P=G.bp.slice(), GD=G.bgd.slice(), GF=G.bgf.slice();
+  for(const mm of G.nf){ const gh=mm.hs, ga=mm.as;
+    GF[mm.hi]+=gh; GD[mm.hi]+=gh-ga; GF[mm.ai]+=ga; GD[mm.ai]+=ga-gh;
+    if(gh>ga) P[mm.hi]+=3; else if(gh<ga) P[mm.ai]+=3; else { P[mm.hi]++; P[mm.ai]++; } }
+  const o=[...Array(G.n).keys()].sort((a,b)=>P[b]-P[a]||GD[b]-GD[a]||GF[b]-GF[a]), ti=o[2];
+  return !(P[ti]>ip || (P[ti]===ip && (GD[ti]>igd || (GD[ti]===igd && GF[ti]>igf))));
+}
+// plain-English condition for the group: phrase the single decisive fixture's required result
+function condText(G, ip, igd, igf){
+  let best=null;
+  G.nf.forEach((mm,k)=>{ const s=idealOutcome(G,k,ip,igd,igf); if(s!=="" && s!=="HDA" && !best) best={mm,s}; });
+  if(!best) return null;
+  const {mm,s}=best, H=`${flag(mm.home)}${esc(mm.habbr||mm.home)}`, Aw=`${flag(mm.away)}${esc(mm.aabbr||mm.away)}`;
+  return {H:`${H} to beat ${Aw}`, A:`${Aw} to beat ${H}`, D:`${H} & ${Aw} to draw`,
+          HD:`${H} to avoid defeat`, DA:`${Aw} to avoid defeat`, HA:`${H} v ${Aw} not to draw`}[s] || null;
+}
+
+/* "What needs to happen" box — one route per pending group, marked up live (✅ secured / ❌ gone / ⏳ in play) */
+function renderNeeds(R){
+  const el=$("#needsCard"); if(!el) return;
+  const rows=[], pend=new Set();
+  for(const G of (R.PG||[])){
+    pend.add(G.gp);
+    const txt=condText(G,R.ip,R.igd,R.igf) || deciderTxt[G.gp] || ("a weaker 3rd than Iran from "+G.gp);
+    deciderTxt[G.gp]=txt;
+    const st=groupStatus(G,R.ip,R.igd,R.igf);
+    const live=G.nf.some(m=>m.state==="in");
+    const now = st==="met"?"secured ✓" : st==="failed"?"gone" : live?(groupOnTrackNow(G,R.ip,R.igd,R.igf)?"on track now":"needs a change") : "not started";
+    rows.push({gp:G.gp,txt,st,now});
+  }
+  // groups already seen this session that have since finished — keep them, ticked or crossed out
+  for(const gp in deciderTxt){
+    if(pend.has(gp)) continue;
+    const r=(R.ranked||[]).find(x=>x.group===gp); if(!r) continue;
+    const st=aboveIran(r.t,R.iran)?"failed":"met";
+    rows.push({gp,txt:deciderTxt[gp],st,now:st==="met"?"secured ✓":"final — gone"});
+  }
+  rows.sort((a,b)=>a.gp.localeCompare(b.gp));
+  const ICON={met:"✅",failed:"❌",live:"⏳"};
+  const head = R.clinched ? `<div class="needhd good">✅ Iran are THROUGH — a route came in. They only ever needed one.</div>`
+    : R.eliminated ? `<div class="needhd bad">❌ Iran are out — all routes closed.</div>`
+    : `<div class="needhd">Iran go through if <b>any one</b> of these lands — they need just one of the three:</div>`;
+  const body = rows.length ? rows.map(r=>{
+    const subCls = r.st==="met"?"ok" : r.st==="failed"?"err" : (r.now==="on track now"?"ok":r.now==="needs a change"?"warn":"");
+    return `<div class="needrow ${r.st}"><span class="ni">${ICON[r.st]}</span><span class="ng">${esc(r.gp.replace("Group ","Grp "))}</span>`
+      +`<span class="nt">${r.txt}</span><span class="nsub ${subCls}">${esc(r.now)}</span></div>`;
+  }).join("") : `<div class="err">All decider groups are final.</div>`;
+  el.innerHTML = head + body;
+}
+
 /* 🎉 one-off celebration when Iran advance — confetti in flag colours + a banner */
 function celebrate(){
   const cv=document.createElement("canvas");
@@ -515,6 +600,7 @@ function render(R,pct,dist){
       <span class="sc">${sc}</span>${favChip}<span class="st ${cl}" style="width:auto;text-align:right">${status}</span></div>`;}).join("")
     || `<div class="err">No matches in the current window — the tournament may be between rounds.</div>`;
   iranState = R.clinched?"in" : R.eliminated?"out" : (R.allFinal?(pct>=50?"in":"out"):"live"); renderNext();
+  try{ renderNeeds(R); }catch(e){}
   if(iranState==="in" && !celebrated){ celebrated=true; try{ celebrate(); }catch(e){} }   // 🎉 Iran advance!
   // dynamic header (H1 + subtitle + tab title) — flips the moment Iran clinch/are eliminated, and pivots to the title favorite when out
   const fv=(iranState==="out" && SRV && SRV.favorite)?SRV:null;
