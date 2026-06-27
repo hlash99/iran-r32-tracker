@@ -5,15 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Iran · Round-of-32 Watch</title>
 <style>
-  :root{--bg:#0f1115;--surface:#171a21;--surface2:#1e222b;--line:#272c36;--ink:#e9ecf1;--muted:#9aa3af;--accent:#6ea8fe;
-        --green:#3ad29f;--red:#f4736b;--amber:#f5c451;}
-  @media (prefers-color-scheme: light){
-    :root{--bg:#f6f7f9;--surface:#ffffff;--surface2:#f0f2f5;--line:#e3e6ea;--ink:#1a1d21;--muted:#5f6772;--accent:#185FA5;
-          --green:#13855f;--red:#c5413a;--amber:#b6831a;}
-  }
+  /* palette ported from the dental review tracker (dark navy + gold/teal/green-red) */
+  :root{--bg:#0a141f;--surface:#121f30;--surface2:#16273c;--line:rgba(255,255,255,.08);--ink:#eaf2fc;--muted:#8fa6bd;
+        --accent:#3ec9c4;--green:#4ade80;--red:#f87171;--amber:#ffd34d;}
   *{box-sizing:border-box}
   body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
-    background:var(--bg);color:var(--ink);-webkit-font-smoothing:antialiased;line-height:1.5}
+    background:radial-gradient(1100px 520px at 75% -12%,#1c3c5e 0%,transparent 60%),
+               radial-gradient(800px 500px at -10% 30%,#14283f 0%,transparent 55%),var(--bg);
+    background-attachment:fixed;color:var(--ink);-webkit-font-smoothing:antialiased;line-height:1.5;min-height:100vh}
   a{color:var(--accent);text-decoration:none}
   .match a, #tableCard a, #nextCard a{color:inherit}
   .match a:hover, #tableCard a:hover, #nextCard a:hover{text-decoration:underline}
@@ -121,6 +120,8 @@ const ymd=d=>d.toISOString().slice(0,10).replace(/-/g,"");
 const scoreWindow=()=>`${ymd(new Date(Date.now()-864e5))}-${ymd(new Date(Date.now()+3*864e5))}`;  // rolling: yesterday → +3d
 const esc=s=>(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/"/g,"&quot;");
 const A=(href,txt,cls)=>href?`<a href="${esc(href)}" target="_blank" rel="noopener"${cls?` class="${cls}"`:""}>${txt}</a>`:txt;
+const FLAG={"Algeria":"🇩🇿","Argentina":"🇦🇷","Australia":"🇦🇺","Austria":"🇦🇹","Belgium":"🇧🇪","Bosnia-Herzegovina":"🇧🇦","Brazil":"🇧🇷","Canada":"🇨🇦","Cape Verde":"🇨🇻","Colombia":"🇨🇴","Congo DR":"🇨🇩","Croatia":"🇭🇷","Curaçao":"🇨🇼","Czechia":"🇨🇿","Ecuador":"🇪🇨","Egypt":"🇪🇬","England":"🏴󠁧󠁢󠁥󠁮󠁧󠁿","France":"🇫🇷","Germany":"🇩🇪","Ghana":"🇬🇭","Haiti":"🇭🇹","Iran":"🇮🇷","Iraq":"🇮🇶","Ivory Coast":"🇨🇮","Japan":"🇯🇵","Jordan":"🇯🇴","Mexico":"🇲🇽","Morocco":"🇲🇦","Netherlands":"🇳🇱","New Zealand":"🇳🇿","Norway":"🇳🇴","Panama":"🇵🇦","Paraguay":"🇵🇾","Portugal":"🇵🇹","Qatar":"🇶🇦","Saudi Arabia":"🇸🇦","Scotland":"🏴󠁧󠁢󠁳󠁣󠁴󠁿","Senegal":"🇸🇳","South Africa":"🇿🇦","South Korea":"🇰🇷","Spain":"🇪🇸","Sweden":"🇸🇪","Switzerland":"🇨🇭","Tunisia":"🇹🇳","Türkiye":"🇹🇷","Turkey":"🇹🇷","United States":"🇺🇸","USA":"🇺🇸","Uruguay":"🇺🇾","Uzbekistan":"🇺🇿"};
+const flag=name=>FLAG[name]?FLAG[name]+" ":"";
 let timer=null, lastStamp=0, feedOk=true, pendingLive=false, mcRun=0, nextInfo=undefined, iranState="live";
 
 /* live "grabbed Xs ago" badge — ticks every second, flags staleness */
@@ -244,7 +245,7 @@ function runMC(F, done){
 /* ── NYT-style needle gauge ── */
 const GG={cx:200,cy:188,ro:166,rbi:78,rbo:162,nlen:140,hub:14,built:false,cur:0,tgt:0,jit:0};
 function rgba(hex,a){const h=hex.replace('#','');const n=parseInt(h,16);return `rgba(${(n>>16)&255},${(n>>8)&255},${n&255},${a})`;}
-const RED="#f4736b", GRN="#3ad29f";
+const RED="#f87171", GRN="#4ade80", NEEDLE="#b9c8da";
 function polar(r,degFromLeft){const t=degFromLeft*Math.PI/180;return [GG.cx+r*Math.cos(t),GG.cy-r*Math.sin(t)];}
 const pTheta=p=>180-p/100*180;        // p=0 → 180° (left), p=100 → 0° (right)
 function buildGauge(){
@@ -253,7 +254,7 @@ function buildGauge(){
     const t1=pTheta(i/N*100),t2=pTheta((i+1)/N*100);
     const [ax,ay]=polar(rbo,t1),[bx,by]=polar(rbo,t2),[cx2,cy2]=polar(rbi,t2),[dx,dy]=polar(rbi,t1);
     const tt=((i+0.5)/N-0.5)*2;                    // -1 (left) … +1 (right)
-    const e=tt<0?[244,115,107]:[58,210,159], f=Math.abs(tt);   // red ← white → green (Iran flag)
+    const e=tt<0?[248,113,113]:[74,222,128], f=Math.abs(tt);   // red ← white → green (Iran flag)
     const cr=Math.round(255+(e[0]-255)*f),cg=Math.round(255+(e[1]-255)*f),cb=Math.round(255+(e[2]-255)*f);
     bands+=`<path d="M${ax} ${ay} L${bx} ${by} L${cx2} ${cy2} L${dx} ${dy} Z" fill="rgba(${cr},${cg},${cb},0.92)"/>`;
   }
@@ -270,10 +271,10 @@ function buildGauge(){
     <text x="40" y="204" font-size="12" font-weight="700" fill="${rgba(RED,.95)}" text-anchor="middle">OUT</text>
     <text x="360" y="204" font-size="12" font-weight="700" fill="${rgba(GRN,.95)}" text-anchor="middle">IN</text>
     <g id="ndl">
-      <polygon points="${cx-6.5},${cy} ${cx+6.5},${cy} ${cx+1.4},${cy-GG.nlen} ${cx-1.4},${cy-GG.nlen}" fill="#828a96"/>
-      <circle cx="${cx}" cy="${cy-GG.nlen}" r="2.6" fill="#828a96"/>
+      <polygon points="${cx-6.5},${cy} ${cx+6.5},${cy} ${cx+1.4},${cy-GG.nlen} ${cx-1.4},${cy-GG.nlen}" fill="${NEEDLE}"/>
+      <circle cx="${cx}" cy="${cy-GG.nlen}" r="2.6" fill="${NEEDLE}"/>
     </g>
-    <circle cx="${cx}" cy="${cy}" r="${GG.hub}" fill="#828a96"/>
+    <circle cx="${cx}" cy="${cy}" r="${GG.hub}" fill="${NEEDLE}"/>
     <circle cx="${cx}" cy="${cy}" r="5.5" fill="var(--surface)"/>
   </svg>`;
   GG.built=true; setInterval(needleTick,33);
@@ -314,7 +315,7 @@ function render(R,pct,dist){
     const isIran=r.t.team===IRAN, pos=i+1;
     const tag=r.done?`<span class="tag">final</span>`:`<span class="tag live">live</span>`;
     return `<tr class="${isIran?"iran":""} ${pos===SLOTS?"cut":""}">
-      <td>${pos}</td><td>${isIran?"🇮🇷 ":""}${A(r.t.link,esc(r.t.team))} <span style="color:var(--muted);font-size:11px">${r.group.replace("Group ","Grp ")}</span></td>
+      <td>${pos}</td><td>${flag(r.t.team)}${A(r.t.link,esc(r.t.team))} <span style="color:var(--muted);font-size:11px">${r.group.replace("Group ","Grp ")}</span></td>
       <td>${r.t.pts}</td><td>${r.t.gd>=0?"+":""}${r.t.gd}</td><td>${r.t.gf}</td><td>${tag}</td></tr>`;}).join("");
   $("#tableCard").innerHTML=`<table><thead><tr><th>#</th><th>Team</th><th>Pts</th><th>GD</th><th>GF</th><th></th></tr></thead><tbody>${rows}</tbody></table>
     <div class="legend" style="margin-top:8px">Dashed line = top-8 cutoff. Ranked by points → goal difference → goals for (FIFA tiebreakers).</div>`;
@@ -345,7 +346,7 @@ function render(R,pct,dist){
     const tag=gp?gp.replace("Group ","").trim():(new Date(m.date)>Date.now()?"R32":"");
     return `<div class="match"${dec?' title="affects Iran"':''}>
       <span class="g">${dec?"🇮🇷 ":""}${esc(tag)}</span>
-      <span class="tm">${A(m.hlink,esc(m.home))} <span style="color:var(--muted)">v</span> ${A(m.alink,esc(m.away))}</span>
+      <span class="tm">${flag(m.home)}${A(m.hlink,esc(m.home))} <span style="color:var(--muted)">v</span> ${flag(m.away)}${A(m.alink,esc(m.away))}</span>
       <span class="sc">${sc}</span><span class="st ${cl}" style="width:auto;text-align:right">${status}</span></div>`;}).join("")
     || `<div class="err">No matches in the current window — the tournament may be between rounds.</div>`;
   iranState=R.allFinal?(pct>=50?"in":"out"):"live"; renderNext();
@@ -403,7 +404,7 @@ function renderNext(){
            :N.state==="post"?A(N.matchLink,esc(N.score)+" · FT")
            :A(N.matchLink,fmtKO(N.date));
   el.innerHTML=`<div class="match" style="align-items:flex-start">
-    <span class="tm"><b>🇮🇷 Iran vs ${A(N.oppLink,esc(N.opp))}</b><div style="font-size:12px;color:var(--muted);margin-top:2px">${esc(N.venue)||"Round of 32"}</div></span>
+    <span class="tm"><b>🇮🇷 Iran vs ${flag(N.opp)}${A(N.oppLink,esc(N.opp))}</b><div style="font-size:12px;color:var(--muted);margin-top:2px">${esc(N.venue)||"Round of 32"}</div></span>
     <span class="st ${N.state==='in'?'liv':N.state==='post'?'fin':'pre'}" style="width:auto;text-align:right;white-space:nowrap">${line}</span></div>
     <div class="legend" style="margin-top:8px">${N.confirmed?"✓ Confirmed Round-of-32 matchup."
       :"Projected — <b>if</b> Iran advance as a best third. Among the open R32 slots, a Group-G third can only be placed opposite <b>"+esc(N.opp)+"</b>."}</div>`;
