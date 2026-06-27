@@ -28,10 +28,12 @@
   @keyframes pl{0%,100%{opacity:1}50%{opacity:.35}}
   .card{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:18px;margin-top:16px}
   .gaugewrap{display:flex;gap:22px;align-items:center;flex-wrap:wrap;justify-content:center}
-  .gauge{position:relative;flex:none}
-  .gauge .pct{position:absolute;left:0;right:0;top:54%;transform:translateY(-50%);text-align:center}
-  .gauge .pct .n{font-size:50px;font-weight:850;letter-spacing:-2px;line-height:1}
-  .gauge .pct .l{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-top:2px}
+  .gcol{display:flex;flex-direction:column;align-items:center;flex:none;width:100%;max-width:400px}
+  .gauge{position:relative;width:100%}
+  .gauge svg{width:100%;height:auto;display:block;overflow:visible}
+  .gcap{text-align:center;margin-top:-10px}
+  .gcap .n{font-size:42px;font-weight:850;letter-spacing:-1.5px;line-height:1}
+  .gcap .l{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-top:2px}
   .verdict{flex:1;min-width:230px}
   .verdict h3{margin:0 0 6px;font-size:18px}
   .verdict p{margin:0;color:var(--muted);font-size:14px}
@@ -68,7 +70,7 @@
   @media (max-width:560px){
     .wrap{padding:22px 12px 70px}
     h1{font-size:21px}
-    .gauge .pct .n{font-size:44px}
+    .gcap .n{font-size:36px}
     th,td{padding:7px 5px}
     .match .g{width:46px} .match .st{width:58px} .match .sc{min-width:38px}
   }
@@ -86,7 +88,7 @@
     <button class="btn" style="margin-left:6px;padding:3px 9px" onclick="refresh(true)">↻</button></div>
 
   <div class="card">
-    <div class="gaugewrap"><div class="gauge" id="gauge"></div><div class="verdict" id="verdict"></div></div>
+    <div class="gaugewrap"><div class="gcol"><div class="gauge" id="gauge"></div><div class="gcap" id="gcap"></div></div><div class="verdict" id="verdict"></div></div>
   </div>
 
   <h2>Best third-placed teams — live table (top 8 advance)</h2>
@@ -196,24 +198,61 @@ function compute(groups, matches){
           allFinal:pending.length===0};
 }
 
-/* ── gauge ── */
-function gauge(pct,clinch){
-  const w=210,h=132,cx=105,cy=114,r=88,sw=17;
-  const a1=Math.PI*(1-pct/100), pt=a=>[cx+r*Math.cos(a),cy-r*Math.sin(a)];
-  const [sx,sy]=pt(Math.PI),[ex,ey]=pt(0),[fx,fy]=pt(a1),big=pct>50?1:0;
+/* ── NYT-style needle gauge ── */
+const GG={cx:200,cy:188,ro:166,rbi:78,rbo:162,nlen:140,hub:14,built:false,cur:0,tgt:0,jit:0};
+function rgba(hex,a){const h=hex.replace('#','');const n=parseInt(h,16);return `rgba(${(n>>16)&255},${(n>>8)&255},${n&255},${a})`;}
+const RED="#f4736b", GRN="#3ad29f";
+function polar(r,degFromLeft){const t=degFromLeft*Math.PI/180;return [GG.cx+r*Math.cos(t),GG.cy-r*Math.sin(t)];}
+const pTheta=p=>180-p/100*180;        // p=0 → 180° (left), p=100 → 0° (right)
+function buildGauge(){
+  const {cx,cy,ro,rbi,rbo}=GG; let bands="";const N=40;
+  for(let i=0;i<N;i++){
+    const t1=pTheta(i/N*100),t2=pTheta((i+1)/N*100);
+    const [ax,ay]=polar(rbo,t1),[bx,by]=polar(rbo,t2),[cx2,cy2]=polar(rbi,t2),[dx,dy]=polar(rbi,t1);
+    const tt=((i+0.5)/N-0.5)*2;                    // -1 (left) … +1 (right)
+    bands+=`<path d="M${ax} ${ay} L${bx} ${by} L${cx2} ${cy2} L${dx} ${dy} Z" fill="${rgba(tt<0?RED:GRN,0.13+0.62*Math.abs(tt))}"/>`;
+  }
+  let ticks="";
+  for(let p=0;p<=100;p+=2.5){const major=p%25===0,t=pTheta(p);
+    const [x1,y1]=polar(ro,t),[x2,y2]=polar(ro-(major?13:7),t);
+    ticks+=`<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="var(--muted)" stroke-width="${major?2:1}" opacity="${major?.85:.4}"/>`;}
+  let labels="";[0,25,50,75,100].forEach(p=>{const [x,y]=polar(ro+15,pTheta(p));
+    labels+=`<text x="${x}" y="${y}" font-size="11" fill="var(--muted)" text-anchor="middle" dominant-baseline="middle">${p}</text>`;});
+  document.getElementById('gauge').innerHTML=`<svg viewBox="0 0 400 210">
+    ${bands}
+    <path d="M${cx-rbi} ${cy} A ${rbi} ${rbi} 0 0 1 ${cx+rbi} ${cy} Z" fill="var(--surface)"/>
+    ${ticks}${labels}
+    <text x="40" y="204" font-size="12" font-weight="700" fill="${rgba(RED,.95)}" text-anchor="middle">OUT</text>
+    <text x="360" y="204" font-size="12" font-weight="700" fill="${rgba(GRN,.95)}" text-anchor="middle">IN</text>
+    <g id="ndl">
+      <polygon points="${cx-6.5},${cy} ${cx+6.5},${cy} ${cx+1.4},${cy-GG.nlen} ${cx-1.4},${cy-GG.nlen}" fill="#828a96"/>
+      <circle cx="${cx}" cy="${cy-GG.nlen}" r="2.6" fill="#828a96"/>
+    </g>
+    <circle cx="${cx}" cy="${cy}" r="${GG.hub}" fill="#828a96"/>
+    <circle cx="${cx}" cy="${cy}" r="5.5" fill="var(--surface)"/>
+  </svg>`;
+  GG.built=true; setInterval(needleTick,33);
+}
+function needleTick(){
+  const ndl=document.getElementById('ndl'); if(!ndl) return;
+  GG.cur+=(GG.tgt-GG.cur)*0.12;
+  const now=Date.now(), jit=GG.jit*(0.7*Math.sin(now/130)+0.3*Math.sin(now/47));
+  ndl.setAttribute('transform',`rotate(${(GG.cur+jit).toFixed(2)} ${GG.cx} ${GG.cy})`);
+}
+function setGauge(pct,allFinal,clinch){
+  if(!GG.built) buildGauge();
+  GG.tgt=(pct-50)/50*90;                                    // -90° (0%) … +90° (100%)
+  GG.jit=allFinal?0:Math.min(8,1.2+0.075*Math.sqrt(pct*(100-pct)));   // nervous while live
   const col=pct>=66?"var(--green)":pct>=38?"var(--amber)":"var(--red)";
-  return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
-    <path d="M${sx} ${sy} A${r} ${r} 0 0 1 ${ex} ${ey}" fill="none" stroke="var(--line)" stroke-width="${sw}" stroke-linecap="round"/>
-    <path d="M${sx} ${sy} A${r} ${r} 0 ${big} 1 ${fx} ${fy}" fill="none" stroke="${col}" stroke-width="${sw}" stroke-linecap="round"/>
-  </svg><div class="pct"><div class="n" style="color:${col}">${pct>=99.5?100:pct<=0.5?0:Math.round(pct)}%</div>
-    <div class="l">${clinch||"chance to advance"}</div></div>`;
+  document.getElementById('gcap').innerHTML=`<div class="n" style="color:${col}">${pct>=99.5?100:pct<=0.5?0:Math.round(pct)}%</div>
+    <div class="l">${clinch||"chance to advance"}</div>`;
 }
 
 /* ── render ── */
 function render(R,stamp,live){
   const ir=R.iran, pct=R.pct;
   const clinch=R.allFinal?(pct>=50?"QUALIFIED ✓":"ELIMINATED"):null;
-  $("#gauge").innerHTML=gauge(pct,clinch);
+  setGauge(pct,R.allFinal,clinch);
   const st=R.allFinal?(pct>=50?["Through to the Round of 32","var(--green)"]:["Eliminated","var(--red)"])
         :pct>=66?["In control","var(--green)"]:pct>=38?["On the bubble","var(--amber)"]:["Sweating it","var(--red)"];
   $("#verdict").innerHTML=`<h3 style="color:${st[1]}">${st[0]}</h3>
