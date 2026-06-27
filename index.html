@@ -229,7 +229,9 @@ function parseScore(j){
     const cs=c.competitors;
     const home=cs.find(x=>x.homeAway==="home")||cs[0], away=cs.find(x=>x.homeAway==="away")||cs[1];
     const elink=((e.links&&(e.links.find(l=>l.rel&&l.rel.includes("summary"))||e.links[0]))||{}).href||null;
+    const ab=t=>t.abbreviation||t.shortDisplayName||t.displayName.slice(0,3).toUpperCase();
     return {home:home.team.displayName,away:away.team.displayName, date:e.date,
+      habbr:ab(home.team),aabbr:ab(away.team),
       hs:+home.score||0,as:+away.score||0,
       state:st.type.state, detail:st.type.shortDetail||st.type.detail,
       link:elink, hlink:(home.team.links&&home.team.links[0]&&home.team.links[0].href)||null,
@@ -520,8 +522,8 @@ function render(R,pct,dist){
       }
     }
     return `<div class="match"${dec?' title="affects Iran"':''}>
-      <span class="g">${dec?"🇮🇷 ":""}${esc(tag)}</span>
-      <span class="tm"><span class="teams">${flag(m.home)}${A(m.hlink,esc(m.home))} <span style="color:var(--muted)">v</span> ${flag(m.away)}${A(m.alink,esc(m.away))}</span>${ideal}</span>
+      <span class="g">${esc(tag)}</span>
+      <span class="tm"><span class="teams">${flag(m.home)}${A(m.hlink,esc(m.habbr||m.home))} <span style="color:var(--muted)">v</span> ${flag(m.away)}${A(m.alink,esc(m.aabbr||m.away))}</span>${ideal}</span>
       <span class="sc">${sc}</span>${favChip}<span class="st ${cl}" style="width:auto;text-align:right">${status}</span></div>`;}).join("")
     || `<div class="err">No matches in the current window — the tournament may be between rounds.</div>`;
   iranState = R.clinched?"in" : R.eliminated?"out" : (R.allFinal?(pct>=50?"in":"out"):"live"); renderNext();
