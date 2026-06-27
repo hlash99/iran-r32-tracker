@@ -107,9 +107,9 @@
 const $=s=>document.querySelector(s);
 const STAND="https://site.api.espn.com/apis/v2/sports/soccer/fifa.world/standings?season=2026";
 const SCORE=d=>`https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard?dates=${d}`;
-const IRAN="Iran", SLOTS=8, SIMS=30000;
+const IRAN="Iran", SLOTS=8, SIMS=100000;
 const dates=["20260626","20260627","20260628"];   // window covering final group matches
-let timer=null, lastStamp=0, feedOk=true, pendingLive=false;
+let timer=null, lastStamp=0, feedOk=true, pendingLive=false, mcRun=0;
 
 /* live "grabbed Xs ago" badge — ticks every second, flags staleness */
 function updateLiveBadge(){
@@ -154,22 +154,8 @@ function rankTeams(ts){return ts.slice().sort((a,b)=>b.pts-a.pts||b.gd-a.gd||b.g
 function thirdOf(g){return rankTeams(g.teams)[2];}
 function aboveIran(t,ir){return (t.pts>ir.pts)||(t.pts===ir.pts&&t.gd>ir.gd)||(t.pts===ir.pts&&t.gd===ir.gd&&t.gf>ir.gf);}
 
-/* ── poisson + match sim ── */
+/* ── poisson goal sampler ── */
 function pois(l){let L=Math.exp(-l),k=0,p=1;do{k++;p*=Math.random();}while(p>L);return k-1;}
-function simMatch(m,strength){
-  if(m.state==="post") return {hs:m.hs,as:m.as};
-  const left=Math.max(0,(90-m.min))/90;
-  const sh=strength[m.home]||1, sa=strength[m.away]||1;
-  const lh=1.35*left*Math.min(1.8,Math.max(.55,Math.exp(0.18*(sh-sa)))),
-        la=1.35*left*Math.min(1.8,Math.max(.55,Math.exp(0.18*(sa-sh))));
-  return {hs:m.hs+pois(lh), as:m.as+pois(la)};
-}
-function applyResult(group,m,res){
-  const h=group.teams.find(t=>t.team===m.home), a=group.teams.find(t=>t.team===m.away);
-  if(!h||!a) return;
-  h.gf+=res.hs; h.gd+=res.hs-res.as; a.gf+=res.as; a.gd+=res.as-res.hs;
-  if(res.hs>res.as)h.pts+=3; else if(res.hs<res.as)a.pts+=3; else {h.pts++;a.pts++;}
-}
 
 /* ── core compute ── */
 function compute(groups, matches){
@@ -190,26 +176,53 @@ function compute(groups, matches){
   const iranPos=ranked.findIndex(r=>r.t.team===IRAN)+1;
   const pending=thirds.filter(r=>!r.done).map(r=>r.group);
 
-  // Monte-Carlo final outcomes
-  const distAbove=new Array(13).fill(0);   // # thirds finishing above Iran (across all groups)
-  let advance=0;
-  const baseAbove= thirds.filter(r=>r.done && r.t.team!==IRAN && aboveIran(r.t,iran)).length;
-  for(let s=0;s<SIMS;s++){
-    // clone only pending groups
-    let above=baseAbove;
-    for(const gp of pending){
-      const g={group:gp,teams:groups.find(x=>x.group===gp).teams.map(t=>({...t}))};
-      for(const m of (matchByGroup[gp]||[])) if(m.state!=="post") applyResult(g,m,simMatch(m,strength));
-      const th=thirdOf(g);
-      if(aboveIran(th,iran)) above++;
+  // Monte-Carlo of the remaining matches — precomputed & allocation-light so 100k+ stays fast
+  const ip=iran.pts, igd=iran.gd, igf=iran.gf;
+  const PG=pending.map(gp=>{
+    const ts=groups.find(x=>x.group===gp).teams, n=ts.length, idx={};
+    ts.forEach((t,i)=>idx[t.team]=i);
+    const nf=[];
+    for(const m of (matchByGroup[gp]||[])) if(m.state!=="post"){
+      const hi=idx[m.home], ai=idx[m.away]; if(hi==null||ai==null) continue;
+      const left=Math.max(0,(90-m.min))/90, sh=strength[m.home]||1, sa=strength[m.away]||1;
+      nf.push({hi,ai,hs:m.hs,as:m.as,
+        lh:1.35*left*Math.min(1.8,Math.max(.55,Math.exp(0.18*(sh-sa)))),
+        la:1.35*left*Math.min(1.8,Math.max(.55,Math.exp(0.18*(sa-sh))))});
     }
-    distAbove[above]++;
-    if(above < SLOTS) advance++;   // Iran (one of the thirds) is in top-8 iff <8 finish above it
-  }
-  const pct=advance/SIMS*100;
+    return {n,bp:ts.map(t=>t.pts),bgd:ts.map(t=>t.gd),bgf:ts.map(t=>t.gf),
+            P:new Array(n),GD:new Array(n),GF:new Array(n),ord:ts.map((_,i)=>i),nf};
+  });
+  const baseAbove= thirds.filter(r=>r.done && r.t.team!==IRAN && aboveIran(r.t,iran)).length;
   return {iran,iranPos,ranked,pending,liveMatches,matchByGroup,teamGroup,
-          dist:distAbove.map(c=>c/SIMS), baseAbove, pct,
-          allFinal:pending.length===0};
+          ip,igd,igf,PG,baseAbove, allFinal:pending.length===0};
+}
+
+/* Monte-Carlo of the remaining matches, chunked across timeouts so 100k runs never block the needle */
+function runMC(F, done){
+  const PG=F.PG, base=F.baseAbove, ip=F.ip, igd=F.igd, igf=F.igf;
+  const dist=new Array(13).fill(0), CH=8000; let s=0, advance=0;
+  if(!PG.length){ dist[base]=1; done(base<SLOTS?100:0, dist); return; }
+  (function step(){
+    const end=Math.min(s+CH,SIMS);
+    for(;s<end;s++){
+      let above=base;
+      for(let gi=0;gi<PG.length;gi++){
+        const G=PG[gi], n=G.n, P=G.P, GD=G.GD, GF=G.GF;
+        for(let i=0;i<n;i++){P[i]=G.bp[i];GD[i]=G.bgd[i];GF[i]=G.bgf[i];}
+        for(let k=0;k<G.nf.length;k++){const m=G.nf[k];
+          const gh=m.hs+pois(m.lh), ga=m.as+pois(m.la);
+          GF[m.hi]+=gh;GD[m.hi]+=gh-ga;GF[m.ai]+=ga;GD[m.ai]+=ga-gh;
+          if(gh>ga)P[m.hi]+=3; else if(gh<ga)P[m.ai]+=3; else {P[m.hi]++;P[m.ai]++;}
+        }
+        const o=G.ord; o.sort((a,b)=>P[b]-P[a]||GD[b]-GD[a]||GF[b]-GF[a]);
+        const ti=o[2];
+        if(P[ti]>ip||(P[ti]===ip&&GD[ti]>igd)||(P[ti]===ip&&GD[ti]===igd&&GF[ti]>igf)) above++;
+      }
+      dist[above]++; if(above<SLOTS) advance++;
+    }
+    if(s<SIMS) setTimeout(step,0);
+    else done(advance/SIMS*100, dist.map(c=>c/SIMS));
+  })();
 }
 
 /* ── NYT-style needle gauge ── */
@@ -265,8 +278,8 @@ function setGauge(pct,allFinal,clinch){
 }
 
 /* ── render ── */
-function render(R,stamp,live){
-  const ir=R.iran, pct=R.pct;
+function render(R,pct,dist){
+  const ir=R.iran;
   const clinch=R.allFinal?(pct>=50?"QUALIFIED ✓":"ELIMINATED"):null;
   setGauge(pct,R.allFinal,clinch);
   const st=R.allFinal?(pct>=50?["Through to the Round of 32","var(--green)"]:["Eliminated","var(--red)"])
@@ -302,7 +315,7 @@ function render(R,stamp,live){
     || `<div class="err">No live group deciders affecting Iran right now.</div>`;
 
   // distribution of # thirds above Iran (Iran in if < 8)
-  const d=R.dist; const maxk=Math.max(2, d.reduce((m,v,i)=>v>0.001?i:m,0));
+  const d=dist; const maxk=Math.max(2, d.reduce((m,v,i)=>v>0.001?i:m,0));
   const showFrom=Math.max(0,R.baseAbove-0);
   let bars="";
   for(let k=showFrom;k<=Math.min(maxk+1,12);k++){
@@ -314,9 +327,8 @@ function render(R,stamp,live){
   $("#dist").innerHTML=bars;
   $("#distLegend").innerHTML=`X-axis = total third-placed teams finishing above Iran. <b style="color:var(--green)">Green</b> (≤7) = Iran top-8 & advances; <b style="color:var(--red)">red</b> (8+) = out. Iran's chance = green total = <b>${Math.round(pct)}%</b>.`;
 
-  // live badge + footer
-  lastStamp=stamp; feedOk=true; pendingLive=R.pending.length>0; updateLiveBadge();
-  $("#foot").innerHTML=`Live group tables & scores from ESPN's public feed, pulled in your browser every 60s. Probability via ${SIMS.toLocaleString()}-run Monte-Carlo of the remaining group matches (Poisson goal model, form-weighted). Iran's 3 pts / 0 GD / 3 GF is locked; it advances unless 8+ thirds finish above it.<br>
+  // footer
+  $("#foot").innerHTML=`Live group tables & scores from ESPN's public feed, pulled in your browser every 60s. Probability via ${SIMS.toLocaleString()}-run Monte-Carlo of the remaining group matches (Poisson goal model, form-weighted), run in non-blocking chunks. Iran's 3 pts / 0 GD / 3 GF is locked; it advances unless 8+ thirds finish above it.<br>
     <a href="https://github.com/hlash99/iran-r32-tracker">source ↗</a> · not affiliated with FIFA or ESPN.`;
 }
 
@@ -328,9 +340,11 @@ async function refresh(manual){
     if(!groups.length) throw new Error("empty standings");
     const matches=scs.flatMap(parseScore);
     const R=compute(groups,matches);
-    const stamp=Date.now();
-    render(R,stamp,true);
-    localStorage.setItem("iranR32_live",JSON.stringify({pct:Math.round(R.pct),pos:R.iranPos,allFinal:R.allFinal,stamp}));
+    lastStamp=Date.now(); feedOk=true; pendingLive=R.pending.length>0; updateLiveBadge();
+    const myRun=++mcRun;
+    runMC(R,(pct,dist)=>{ if(myRun!==mcRun) return;     // ignore a superseded run
+      render(R,pct,dist);
+      localStorage.setItem("iranR32_live",JSON.stringify({pct:Math.round(pct),pos:R.iranPos,allFinal:R.allFinal,stamp:lastStamp})); });
   }catch(e){
     feedOk=false; updateLiveBadge();
     if(!document.querySelector("#tableCard table")) $("#tableMsg").textContent="Couldn't reach the live feed. It retries every 60s.";
