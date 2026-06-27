@@ -94,8 +94,11 @@
   <h2>Best third-placed teams — live table (top 8 advance)</h2>
   <div class="card" id="tableCard"><div class="err" id="tableMsg">loading…</div></div>
 
-  <h2>Tomorrow's deciders <span id="decHdr" style="text-transform:none;letter-spacing:0;color:var(--muted)"></span></h2>
+  <h2><span id="decLabel">Group deciders</span> <span id="decHdr" style="text-transform:none;letter-spacing:0;color:var(--muted)"></span></h2>
   <div class="card" id="matchCard"></div>
+
+  <h2>Next up · Round of 32</h2>
+  <div class="card" id="nextCard"><div class="err">loading bracket…</div></div>
 
   <h2>How many third-place teams finish above Iran?</h2>
   <div class="card"><div class="dist" id="dist"></div><div class="legend" id="distLegend"></div></div>
@@ -109,7 +112,7 @@ const STAND="https://site.api.espn.com/apis/v2/sports/soccer/fifa.world/standing
 const SCORE=d=>`https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard?dates=${d}`;
 const IRAN="Iran", SLOTS=8, SIMS=100000;
 const dates=["20260626","20260627","20260628"];   // window covering final group matches
-let timer=null, lastStamp=0, feedOk=true, pendingLive=false, mcRun=0;
+let timer=null, lastStamp=0, feedOk=true, pendingLive=false, mcRun=0, nextInfo=undefined, iranState="live";
 
 /* live "grabbed Xs ago" badge — ticks every second, flags staleness */
 function updateLiveBadge(){
@@ -142,7 +145,7 @@ function parseScore(j){
   return (j.events||[]).map(e=>{const c=e.competitions[0],st=e.status;
     const cs=c.competitors;
     const home=cs.find(x=>x.homeAway==="home")||cs[0], away=cs.find(x=>x.homeAway==="away")||cs[1];
-    return {home:home.team.displayName,away:away.team.displayName,
+    return {home:home.team.displayName,away:away.team.displayName, date:e.date,
       hs:+home.score||0,as:+away.score||0,
       state:st.type.state, detail:st.type.shortDetail||st.type.detail,
       min:st.type.state==="in"?(st.period>=2?45+(parseInt(st.displayClock)||0):(parseInt(st.displayClock)||0)):(st.type.state==="post"?90:0)};
@@ -303,16 +306,28 @@ function render(R,pct,dist){
   $("#tableCard").innerHTML=`<table><thead><tr><th>#</th><th>Team</th><th>Pts</th><th>GD</th><th>GF</th><th></th></tr></thead><tbody>${rows}</tbody></table>
     <div class="legend" style="margin-top:8px">Dashed line = top-8 cutoff. Ranked by points → goal difference → goals for (FIFA tiebreakers).</div>`;
 
-  // matches
-  const ms=R.liveMatches.length?R.liveMatches:Object.values(R.matchByGroup).flat().filter(m=>R.pending.includes(R.teamGroup[m.home]));
+  // matches + dynamic heading
+  const decMs=R.liveMatches.length?R.liveMatches:Object.values(R.matchByGroup).flat().filter(m=>R.pending.includes(R.teamGroup[m.home]));
+  let label="Group deciders";
+  if(R.allFinal) label="Final group matches";
+  else if(decMs.some(m=>m.state==="in")) label="Deciders — LIVE now";
+  else { const soon=decMs.filter(m=>m.state==="pre").map(m=>new Date(m.date)).sort((a,b)=>a-b)[0];
+    if(soon){const now=new Date(), tmrw=new Date(now.getTime()+864e5);
+      label=soon.toDateString()===now.toDateString()?"Today's deciders":
+            soon.toDateString()===tmrw.toDateString()?"Tomorrow's deciders":"Upcoming deciders";} }
+  $("#decLabel").textContent=label;
   $("#decHdr").textContent=R.allFinal?"— all final":"";
-  $("#matchCard").innerHTML=(ms.length?ms:Object.values(R.matchByGroup).flat()).slice(0,8).map(m=>{
+  const kick=m=>{const d=new Date(m.date),now=new Date(),t=d.toLocaleTimeString([],{hour:'numeric',minute:'2-digit'});
+    return d.toDateString()===now.toDateString()?t:d.toLocaleDateString([],{weekday:'short'})+" "+t;};
+  $("#matchCard").innerHTML=(decMs.length?decMs:Object.values(R.matchByGroup).flat()).slice(0,8).map(m=>{
     const cl=m.state==="post"?"fin":m.state==="in"?"liv":"pre";
     const sc=m.state==="pre"?"–":`${m.hs}–${m.as}`;
+    const status=m.state==="in"?m.detail:m.state==="post"?"FT":kick(m);
     return `<div class="match"><span class="g">${(R.teamGroup[m.home]||"").replace("Group ","Grp ")}</span>
       <span class="tm">${m.home} v ${m.away}</span><span class="sc">${sc}</span>
-      <span class="st ${cl}">${m.state==="in"?m.detail:m.state==="post"?"FT":m.detail.replace(/^.*at /,"")}</span></div>`;}).join("")
+      <span class="st ${cl}">${status}</span></div>`;}).join("")
     || `<div class="err">No live group deciders affecting Iran right now.</div>`;
+  iranState=R.allFinal?(pct>=50?"in":"out"):"live"; renderNext();
 
   // distribution of # thirds above Iran (Iran in if < 8)
   const d=dist; const maxk=Math.max(2, d.reduce((m,v,i)=>v>0.001?i:m,0));
@@ -330,6 +345,38 @@ function render(R,pct,dist){
   // footer
   $("#foot").innerHTML=`Live group tables & scores from ESPN's public feed, pulled in your browser every 60s. Probability via ${SIMS.toLocaleString()}-run Monte-Carlo of the remaining group matches (Poisson goal model, form-weighted), run in non-blocking chunks. Iran's 3 pts / 0 GD / 3 GF is locked; it advances unless 8+ thirds finish above it.<br>
     <a href="https://github.com/hlash99/iran-r32-tracker">source ↗</a> · not affiliated with FIFA or ESPN.`;
+}
+
+/* ── Iran's Round-of-32 opponent (reads ESPN's bracket; a Group-G third can only land
+   in the one open slot that lists G, so we surface that as the projected opponent until
+   ESPN names Iran in the fixture) ── */
+function fmtKO(s){const d=new Date(s);return d.toLocaleDateString([],{weekday:"short",month:"short",day:"numeric"})
+  +" · "+d.toLocaleTimeString([],{hour:"numeric",minute:"2-digit"});}
+async function fetchNext(){
+  try{
+    const j=await fetch(SCORE("20260628-20260704")).then(r=>r.json());
+    const evs=(j.events||[]).map(e=>{const c=e.competitions[0];
+      return {date:e.date, venue:(c.venue&&c.venue.fullName)||"", state:e.status.type.state,
+        detail:e.status.type.shortDetail||"", teams:c.competitors.map(x=>({n:x.team.displayName,s:x.score}))};});
+    let m=evs.find(e=>e.teams.some(t=>/^iran$/i.test(t.n))); const confirmed=!!m;
+    if(!m) m=evs.find(e=>e.teams.some(t=>/^third place group/i.test(t.n)
+      && t.n.replace(/^third place group /i,"").split("/").map(s=>s.trim()).includes("G")));
+    nextInfo=m?{opp:(m.teams.find(t=>!/^iran$/i.test(t.n))||{}).n||"TBD", date:m.date, venue:m.venue,
+      confirmed, state:m.state, detail:m.detail, score:m.teams.map(t=>t.s).join("–")}:null;
+  }catch(e){ if(nextInfo===undefined) nextInfo=null; }
+  renderNext();
+}
+function renderNext(){
+  const el=$("#nextCard"); if(!el) return;
+  if(iranState==="out"){el.innerHTML=`<div class="err">Iran were eliminated in the group stage — no Round-of-32 match.</div>`;return;}
+  if(nextInfo===undefined) return;                 // still loading
+  if(!nextInfo){el.innerHTML=`<div class="err">Round-of-32 matchup is set once the bracket fills in — check back after the group stage.</div>`;return;}
+  const N=nextInfo, line=N.state==="pre"?fmtKO(N.date):(N.state==="in"?`${N.score} · ${N.detail}`:`${N.score} · FT`);
+  el.innerHTML=`<div class="match" style="align-items:flex-start">
+    <span class="tm"><b>🇮🇷 Iran vs ${N.opp}</b><div style="font-size:12px;color:var(--muted);margin-top:2px">${N.venue||"Round of 32"}</div></span>
+    <span class="st ${N.state==='in'?'liv':N.state==='post'?'fin':'pre'}" style="width:auto;text-align:right;white-space:nowrap">${line}</span></div>
+    <div class="legend" style="margin-top:8px">${N.confirmed?"✓ Confirmed Round-of-32 matchup."
+      :"Projected — <b>if</b> Iran advance as a best third. Among the open R32 slots, a Group-G third can only be placed opposite <b>"+N.opp+"</b>."}</div>`;
 }
 
 /* ── fetch loop ── */
@@ -352,7 +399,8 @@ async function refresh(manual){
 }
 function safe(f){try{return f();}catch(e){return null;}}
 refresh(); timer=setInterval(refresh,60000);
-document.addEventListener("visibilitychange",()=>{if(!document.hidden)refresh();});
+fetchNext(); setInterval(fetchNext,240000);     // bracket changes slowly — every 4 min
+document.addEventListener("visibilitychange",()=>{if(!document.hidden){refresh();fetchNext();}});
 </script>
 </body>
 </html>
