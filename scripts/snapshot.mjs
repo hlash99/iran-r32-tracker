@@ -121,6 +121,41 @@ async function findNext() {
   } catch { return null; }
 }
 
+// Most-likely World Cup winner via a bracket Monte-Carlo over the actual R32 pairings.
+// Ratings come from group-stage form; later rounds pair winners in bracket order (an
+// estimate). Returns null until the R32 field is concrete (i.e. the group stage is done).
+function teamRatings(groups) {
+  const r = {};
+  groups.forEach(g => g.teams.forEach(t => { const p = Math.max(1, t.P); r[t.team] = t.pts / p + 0.4 * (t.gd / p); }));
+  return r;
+}
+async function computeFavorite(groups) {
+  let j; try { j = await fetch(SCORE("20260628-20260703")).then(r => r.json()); } catch { return null; }
+  const ph = t => /third place|winner|group/i.test(t);
+  const pairs = (j.events || [])
+    .map(e => ({ date: e.date, teams: e.competitions[0].competitors.map(x => x.team.displayName) }))
+    .filter(e => e.teams.length === 2 && e.teams.every(t => !ph(t)))
+    .sort((a, b) => new Date(a.date) - new Date(b.date))
+    .map(e => e.teams.slice());
+  if (pairs.length < 16) return null;                 // R32 not fully set yet
+  const first = pairs.slice(0, 16);
+  const rt = teamRatings(groups), K = 0.9, rg = t => (rt[t] ?? 0);
+  const pWin = (a, b) => 1 / (1 + Math.exp(-K * (rg(a) - rg(b))));
+  const N = 20000, wins = {};
+  for (let s = 0; s < N; s++) {
+    let cur = first;
+    for (;;) {
+      const w = cur.map(([a, b]) => (Math.random() < pWin(a, b) ? a : b));
+      if (w.length === 1) { wins[w[0]] = (wins[w[0]] || 0) + 1; break; }
+      const nx = []; for (let i = 0; i < w.length; i += 2) nx.push([w[i], w[i + 1]]);
+      cur = nx;
+    }
+  }
+  let fav = null, fc = -1;
+  for (const t in wins) if (wins[t] > fc) { fc = wins[t]; fav = t; }
+  return fav ? { favorite: fav, favorite_pct: Math.round(fc / N * 100) } : null;
+}
+
 async function main() {
   // rolling activity window — also covers the last group day's matches for the sim
   const win = `${ymd(new Date(Date.now() - 2 * 864e5))}-${ymd(new Date(Date.now() + 5 * 864e5))}`;
@@ -147,6 +182,7 @@ async function main() {
   const R = compute(groups, matches);
   const next = R.allFinal && R.pct < 50 ? null : await findNext();
   const status = R.allFinal ? (R.pct >= 50 ? "advanced" : "eliminated") : "live";
+  const fav = await computeFavorite(groups);   // most-likely WC winner (null until R32 is set)
 
   const prev = JSON.parse(readFileSync(join(ROOT, "data.json"), "utf8"));
   const out = {
@@ -162,11 +198,14 @@ async function main() {
     next_opponent: next ? next.opponent : null,
     next_kickoff: next ? next.kickoff : null,
     next_confirmed: next ? next.confirmed : null,
+    favorite: fav ? fav.favorite : null,
+    favorite_pct: fav ? fav.favorite_pct : null,
     live: true,
     source: "ESPN public feed (standings + scoreboard); recomputed server-side by scripts/snapshot.mjs",
   };
   writeFileSync(join(ROOT, "data.json"), JSON.stringify(out, null, 2) + "\n");
   console.log(`Iran ${R.pct.toFixed(1)}% (pos ${R.iranPos}, ${R.pending.length} groups live, status=${status})`
-    + (next ? ` · next: ${next.opponent}${next.confirmed ? " (confirmed)" : " (projected)"}` : ""));
+    + (next ? ` · next: ${next.opponent}${next.confirmed ? " (confirmed)" : " (projected)"}` : "")
+    + (fav ? ` · WC favorite: ${fav.favorite} ${fav.favorite_pct}%` : " · favorite: TBD (R32 not set)"));
 }
 main().catch(e => { console.error(e); process.exit(1); });
