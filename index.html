@@ -136,7 +136,7 @@
 <body>
 <div class="wrap">
   <h1 id="h1"><span class="flag">🇮🇷</span> Iran — Round-of-32 Watch</h1>
-  <p class="sub">Live probability Iran advances as one of the <b>8 best third-placed teams</b> — computed in real time from the live group tables.</p>
+  <p class="sub" id="sub">Live probability Iran advances as one of the <b>8 best third-placed teams</b> — computed in real time from the live group tables.</p>
   <div class="live stale" id="live"><span class="dot"></span><span id="liveTxt">connecting to live feed…</span>
     <button class="btn" style="margin-left:6px;padding:3px 9px" onclick="refresh(true)">↻</button>
     <a class="reset" onclick="resetBlocks()" title="Restore the default section order">⤺ reset layout</a></div>
@@ -378,6 +378,7 @@ function displayPct(R,p){ return R.clinched?100:R.eliminated?0:calibrate(p); }
 function render(R,pct,dist){
   const ir=R.iran;
   const decided = R.clinched?"in" : R.eliminated?"out" : (R.allFinal?(pct>=50?"in":"out"):null);
+  const shown = displayPct(R,pct);
   const fav = (decided==="out" && SRV && SRV.favorite) ? SRV : null;
   if(fav){
     // Iran out → the meter pivots to the World Cup title favorite (market-blended, computed server-side)
@@ -386,7 +387,6 @@ function render(R,pct,dist){
       <p style="font-size:17px;margin:8px 0 2px"><b>${flag(fav.favorite)}${esc(fav.favorite)}</b> · <b style="color:var(--green)">${fav.favorite_pct}%</b> to win the World Cup</p>
       <div class="pills">${fav.favorite_pct_model!=null?`<span class="pill">model ${fav.favorite_pct_model}%</span>`:""}${fav.favorite_pct_market!=null?`<span class="pill">market ${fav.favorite_pct_market}%</span>`:""}<span class="pill">blended ${fav.favorite_pct}%</span></div>`;
   } else {
-    const shown = displayPct(R,pct);
     const clinch = decided==="in"?"QUALIFIED ✓" : decided==="out"?"ELIMINATED" : null;
     setGauge(shown, !!decided, clinch, ["OUT","IN"]);
     const note = R.clinched?`Iran have <b>clinched</b> a Round-of-32 spot — confirmed before the group stage even finished.`
@@ -440,10 +440,21 @@ function render(R,pct,dist){
       <span class="sc">${sc}</span><span class="st ${cl}" style="width:auto;text-align:right">${status}</span></div>`;}).join("")
     || `<div class="err">No matches in the current window — the tournament may be between rounds.</div>`;
   iranState = R.clinched?"in" : R.eliminated?"out" : (R.allFinal?(pct>=50?"in":"out"):"live"); renderNext();
-  // dynamic heading + browser-tab title (flips the moment Iran clinch/are eliminated — no need to wait for the last game)
-  const h1=iranState==="in"?"Iran — Into the Round of 32 ✓":iranState==="out"?"Iran — Out in the group stage":"Iran — Round-of-32 Watch";
-  $("#h1").innerHTML=`<span class="flag">🇮🇷</span> ${h1}`;
-  document.title=iranState==="in"?"🇮🇷 Iran are THROUGH ✓":iranState==="out"?"Iran — eliminated":`Iran R32: ${Math.round(shown)}%`;
+  // dynamic header (H1 + subtitle + tab title) — flips the moment Iran clinch/are eliminated, and pivots to the title favorite when out
+  const fv=(iranState==="out" && SRV && SRV.favorite)?SRV:null;
+  const h1 = iranState==="in" ? "Iran — Into the Round of 32 ✓"
+           : iranState==="out" ? (fv?"World Cup — Title Watch":"Iran — Out in the group stage")
+           : "Iran — Round-of-32 Watch";
+  $("#h1").innerHTML=`<span class="flag">${iranState==="out"&&fv?"🏆":"🇮🇷"}</span> ${h1}`;
+  $("#sub").innerHTML = iranState==="in"
+      ? `Iran are <b>through to the Round of 32</b> — now tracking their knockout path, the bracket and live scores.`
+    : iranState==="out"
+      ? (fv?`🇮🇷 Iran were eliminated in the group stage. The meter now tracks the <b>live World Cup title favorite</b> — the model blended with the betting markets.`
+           :`🇮🇷 Iran were eliminated in the group stage — this page is now a live World Cup knockout tracker.`)
+      : `Live probability Iran advances as one of the <b>8 best third-placed teams</b> — computed in real time from the live group tables.`;
+  document.title = iranState==="in" ? "🇮🇷 Iran are THROUGH ✓"
+    : iranState==="out" ? (fv?`🏆 ${fv.favorite} ${fv.favorite_pct}% — WC favorite`:"Iran — eliminated")
+    : `Iran R32: ${Math.round(shown)}%`;
 
   // footer
   $("#foot").innerHTML=`Live group tables & scores from ESPN's public feed, pulled in your browser every 60s. Probability via ${SIMS.toLocaleString()}-run Monte-Carlo of the remaining group matches, then tempered toward betting-market consensus (Kalshi/Polymarket) so it isn't over-optimistic. The gauge snaps to 100% / 0% the instant Iran are mathematically clinched or eliminated — it doesn't wait for the final game.<br>
