@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Iran · Round-of-32 Watch</title>
+<style>
+  :root{--bg:#0f1115;--surface:#171a21;--surface2:#1e222b;--line:#272c36;--ink:#e9ecf1;--muted:#9aa3af;--accent:#6ea8fe;
+        --green:#3ad29f;--red:#f4736b;--amber:#f5c451;--iran-g:#3ad29f;--iran-r:#f4736b;}
+  @media (prefers-color-scheme: light){
+    :root{--bg:#f6f7f9;--surface:#ffffff;--surface2:#f0f2f5;--line:#e3e6ea;--ink:#1a1d21;--muted:#5f6772;--accent:#185FA5;
+          --green:#13855f;--red:#c5413a;--amber:#b6831a;}
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    background:var(--bg);color:var(--ink);-webkit-font-smoothing:antialiased;line-height:1.5}
+  a{color:var(--accent);text-decoration:none}
+  .wrap{max-width:920px;margin:0 auto;padding:34px 18px 80px}
+  .crumb{font-size:13px;color:var(--muted);margin-bottom:10px}
+  h1{font-size:27px;margin:0 0 4px;font-weight:800;letter-spacing:-.5px}
+  h1 .flag{font-weight:400}
+  .sub{color:var(--muted);margin:0;font-size:14.5px}
+  .asof{font-size:12px;color:var(--muted);margin-top:8px;background:var(--surface2);border:1px solid var(--line);
+        border-radius:10px;padding:8px 11px;display:inline-block}
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:20px;margin-top:18px}
+  .gaugewrap{display:flex;gap:24px;align-items:center;flex-wrap:wrap;justify-content:center}
+  .gauge{position:relative;flex:none}
+  .gauge .pct{position:absolute;left:0;right:0;top:54%;transform:translateY(-50%);text-align:center}
+  .gauge .pct .n{font-size:52px;font-weight:850;letter-spacing:-2px;line-height:1}
+  .gauge .pct .l{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-top:2px}
+  .verdict{flex:1;min-width:240px}
+  .verdict h3{margin:0 0 6px;font-size:17px}
+  .verdict p{margin:0 0 8px;color:var(--muted);font-size:14px}
+  .pills{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+  .pill{font-size:12.5px;border:1px solid var(--line);background:var(--surface2);border-radius:20px;padding:3px 11px}
+  .pill b{font-weight:700}
+  h2{font-size:13px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin:26px 0 12px;font-weight:600}
+  .row{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:9px 0;border-bottom:1px solid var(--line)}
+  .row:last-child{border-bottom:0}
+  .row .nm{font-size:14.5px;font-weight:600}
+  .row .nt{font-size:12.5px;color:var(--muted)}
+  .x{cursor:pointer;color:var(--muted);border:1px solid var(--line);border-radius:7px;width:26px;height:26px;
+     display:flex;align-items:center;justify-content:center;font-size:13px;background:var(--surface2);flex:none}
+  .x:hover{color:var(--red);border-color:var(--red)}
+  .threat{border:1px solid var(--line);border-radius:13px;padding:13px 14px;margin-bottom:11px;background:var(--surface2)}
+  .threat .top{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+  .threat .ti{font-size:15px;font-weight:650}
+  .threat .tm{font-size:12.5px;color:var(--muted);margin-top:1px}
+  .threat .qv{font-size:15px;font-weight:700;min-width:46px;text-align:right}
+  .seg{display:inline-flex;border:1px solid var(--line);border-radius:9px;overflow:hidden;margin-top:11px}
+  .seg button{border:0;background:var(--surface);color:var(--muted);padding:6px 12px;font-size:12.5px;cursor:pointer}
+  .seg button.on{color:#fff}
+  .seg button.on.above{background:var(--red)} .seg button.on.below{background:var(--green)} .seg button.on.live{background:var(--accent)}
+  input[type=range]{width:100%;margin:12px 0 2px;accent-color:var(--accent)}
+  .rnote{font-size:11.5px;color:var(--muted);margin-top:4px}
+  .dist{display:flex;gap:6px;align-items:flex-end;height:110px;margin-top:10px}
+  .bar{flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;justify-content:flex-end;height:100%}
+  .bar .b{width:100%;border-radius:6px 6px 0 0;min-height:2px;transition:height .4s ease,background .2s}
+  .bar .bl{font-size:11px;color:var(--muted);text-align:center;line-height:1.2}
+  .bar .bp{font-size:11.5px;font-weight:600}
+  .legend{font-size:12px;color:var(--muted);margin-top:8px}
+  .ctrls{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px}
+  .btn{border:1px solid var(--line);background:var(--surface2);color:var(--ink);border-radius:9px;padding:7px 13px;
+       font-size:13px;cursor:pointer}
+  .btn:hover{border-color:var(--accent);color:var(--accent)}
+  .addrow{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+  .addrow input{flex:1;min-width:120px;background:var(--surface2);border:1px solid var(--line);border-radius:9px;
+                padding:7px 10px;color:var(--ink);font-size:13px}
+  footer{margin-top:34px;color:var(--muted);font-size:11.5px;line-height:1.7;text-align:center}
+  .barwrap{position:relative}
+  .cut{position:absolute;top:0;bottom:24px;border-left:2px dashed var(--amber);pointer-events:none}
+  .cut span{position:absolute;top:-18px;left:4px;font-size:10.5px;color:var(--amber);white-space:nowrap}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="crumb"><a href="https://hlash99.github.io/">← hlash99 dashboard</a></div>
+  <h1><span class="flag">🇮🇷</span> Iran — Round-of-32 Watch</h1>
+  <p class="sub">Live probability that Iran advances as one of the <b>8 best third-placed teams</b>, updated as tomorrow's deciders play out.</p>
+  <div class="asof" id="asof"></div>
+
+  <div class="card">
+    <div class="gaugewrap">
+      <div class="gauge" id="gauge"></div>
+      <div class="verdict" id="verdict"></div>
+    </div>
+  </div>
+
+  <h2>Iran's group is done — now it's the third-place race</h2>
+  <div class="card" id="iranCard"></div>
+
+  <h2>Locked in above Iran</h2>
+  <div class="card" id="lockedCard"></div>
+
+  <h2>Tomorrow's deciders — each could push Iran down</h2>
+  <div class="card">
+    <div id="threats"></div>
+    <div class="addrow">
+      <input id="naddL" placeholder="group / team">
+      <input id="naddM" placeholder="match (optional)">
+      <button class="btn" onclick="addThreat()">+ add threat</button>
+    </div>
+    <div class="ctrls"><button class="btn" onclick="resetAll()">↺ reset to baseline</button></div>
+  </div>
+
+  <h2>How many third-place teams finish above Iran?</h2>
+  <div class="card">
+    <div class="barwrap"><div class="dist" id="dist"></div><div class="cut" id="cut"><span id="cutlbl"></span></div></div>
+    <div class="legend" id="distLegend"></div>
+  </div>
+
+  <footer id="foot"></footer>
+</div>
+
+<script>
+/* ── Seed state (public group-stage data as of June 26, 2026; all editable) ── */
+const SEED={
+  updated:"2026-06-26",
+  asof:"Seeded from public group-stage standings, June 26 2026. Iran (Group G) is locked on 3 pts / 0 GD / 3 GF. Adjust the sliders or set results live as the June 27 matches play.",
+  iran:{pts:3,gd:0,gf:3,record:["2–2 New Zealand","0–0 Belgium","1–1 Egypt"]},
+  slots:8,                         // best 8 of 12 third-placed teams advance
+  lockedAbove:[
+    {team:"Sweden",note:"4 pts"},
+    {team:"Ecuador",note:"4 pts"},
+    {team:"Bosnia & Herzegovina",note:"4 pts · −1"},
+    {team:"Paraguay",note:"4 pts · −2"},
+    {team:"Senegal",note:"3 pts · +2 GD"},
+  ],
+  lockedBelow:[
+    {team:"South Korea",note:"3 pts · −1 GD — below Iran"},
+  ],
+  // each pending group yields a 3rd-place team; q = est. probability it outranks Iran's 3/0/3
+  threats:[
+    {id:"cro",label:"Croatia's group",match:"Croatia v Ghana",q:0.50,res:null},
+    {id:"arg",label:"Argentina's group",match:"Jordan v Argentina · Algeria v Austria",q:0.45,res:null},
+    {id:"por",label:"Portugal's group",match:"Colombia v Portugal · DR Congo v Uzbekistan",q:0.50,res:null},
+    {id:"eng",label:"England's group",match:"Panama v England (+ pair match)",q:0.40,res:null},
+  ],
+};
+const LS="iranR32";
+let S=load();
+function load(){try{const v=JSON.parse(localStorage.getItem(LS));if(v&&v.threats)return v;}catch(e){}
+  return JSON.parse(JSON.stringify(SEED));}
+function save(){localStorage.setItem(LS,JSON.stringify(S));}
+
+const $=s=>document.querySelector(s);
+const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
+const qOf=t=>t.res==="above"?1:t.res==="below"?0:t.q;
+
+/* tolerance: how many more thirds can finish above Iran and Iran still makes top-8 */
+function tolerance(){return S.slots-1-S.lockedAbove.length;}
+
+/* Poisson-binomial: P(k of the threats finish above Iran) */
+function distribution(){
+  let p=[1];
+  for(const t of S.threats){const q=qOf(t);const np=new Array(p.length+1).fill(0);
+    for(let k=0;k<p.length;k++){np[k]+=p[k]*(1-q);np[k+1]+=p[k]*q;}p=np;}
+  return p;                     // p[k] = prob exactly k above
+}
+function advanceProb(){
+  const tol=tolerance(); if(tol<0)return 0; const p=distribution();
+  let s=0;for(let k=0;k<=Math.min(tol,p.length-1);k++)s+=p[k];return s;
+}
+
+/* ── gauge (semicircle) ── */
+function gauge(pct){
+  const w=220,h=140,cx=110,cy=120,r=92,sw=18;
+  const a0=Math.PI, a1=Math.PI*(1-pct/100);
+  const pt=a=>[cx+r*Math.cos(a),cy-r*Math.sin(a)];
+  const [sx,sy]=pt(a0),[ex,ey]=pt(0),[fx,fy]=pt(a1);
+  const big=pct>50?1:0;
+  const col=pct>=66?"var(--green)":pct>=40?"var(--amber)":"var(--red)";
+  return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
+    <path d="M${sx} ${sy} A${r} ${r} 0 0 1 ${ex} ${ey}" fill="none" stroke="var(--line)" stroke-width="${sw}" stroke-linecap="round"/>
+    <path d="M${sx} ${sy} A${r} ${r} 0 ${big} 1 ${fx} ${fy}" fill="none" stroke="${col}" stroke-width="${sw}" stroke-linecap="round"/>
+  </svg>
+  <div class="pct"><div class="n" style="color:${col}">${Math.round(pct)}%</div><div class="l">chance to advance</div></div>`;
+}
+
+function render(){
+  $("#asof").textContent=S.asof;
+  const pct=advanceProb()*100, tol=tolerance(), n=S.threats.length;
+  const liveAbove=S.threats.filter(t=>t.res==="above").length;
+  const liveBelow=S.threats.filter(t=>t.res==="below").length;
+
+  $("#gauge").innerHTML=gauge(pct);
+  const status=pct>=66?["In control","var(--green)"]:pct>=40?["On the bubble","var(--amber)"]:["Sweating it","var(--red)"];
+  $("#verdict").innerHTML=`<h3 style="color:${status[1]}">${status[0]}</h3>
+    <p>Iran is provisionally <b>6th</b> of the third-placed teams. ${S.lockedAbove.length} are already locked above them,
+    so Iran grabs one of the last open spots unless <b>more than ${tol}</b> of tomorrow's groups produce a third-place team better than
+    <b>3 pts · 0 GD · 3 GF</b>.</p>
+    <div class="pills">
+      <span class="pill"><b>${S.slots}</b> thirds advance</span>
+      <span class="pill"><b>${S.lockedAbove.length}</b> locked above</span>
+      <span class="pill">tolerance <b>${tol}</b> of <b>${n}</b></span>
+      ${liveAbove?`<span class="pill" style="border-color:var(--red)"><b>${liveAbove}</b> above (final)</span>`:""}
+      ${liveBelow?`<span class="pill" style="border-color:var(--green)"><b>${liveBelow}</b> below (final)</span>`:""}
+    </div>`;
+
+  const ir=S.iran;
+  $("#iranCard").innerHTML=`<div class="row"><div><div class="nm">🇮🇷 Iran — Group G, 3rd place</div>
+    <div class="nt">${ir.record.join("  ·  ")}</div></div>
+    <div style="text-align:right"><div class="nm">${ir.pts} pts</div><div class="nt">${ir.gd>=0?"+":""}${ir.gd} GD · ${ir.gf} GF</div></div></div>`;
+
+  $("#lockedCard").innerHTML=S.lockedAbove.map((t,i)=>
+    `<div class="row"><div><div class="nm">${t.team}</div><div class="nt">${t.note}</div></div>
+      <div class="x" onclick="rmLocked(${i})" title="they slipped below Iran">✕</div></div>`).join("")
+    + (S.lockedBelow.length?`<div class="nt" style="margin-top:10px">Below Iran: ${S.lockedBelow.map(t=>t.team+" ("+t.note.replace(' — below Iran','')+")").join(", ")}</div>`:"");
+
+  $("#threats").innerHTML=S.threats.map((t,i)=>{
+    const q=qOf(t);
+    return `<div class="threat">
+      <div class="top"><div><div class="ti">${t.label}</div><div class="tm">${t.match||""}</div></div>
+        <div style="display:flex;gap:8px;align-items:center"><div class="qv">${Math.round(q*100)}%</div>
+        <div class="x" onclick="rmThreat(${i})">✕</div></div></div>
+      <div class="seg">
+        <button class="${t.res==="above"?"on above":""}" onclick="setRes(${i},'above')">finished ABOVE</button>
+        <button class="${t.res==null?"on live":""}" onclick="setRes(${i},null)">live / unknown</button>
+        <button class="${t.res==="below"?"on below":""}" onclick="setRes(${i},'below')">finished BELOW</button>
+      </div>
+      ${t.res==null?`<input type="range" min="0" max="100" value="${Math.round(t.q*100)}" oninput="setQ(${i},this.value)">
+        <div class="rnote">est. chance this group's 3rd-place team beats Iran's 3 pts / 0 GD / 3 GF</div>`:""}
+    </div>`;}).join("");
+
+  // distribution
+  const p=distribution();
+  const max=Math.max(...p);
+  $("#dist").innerHTML=p.map((v,k)=>{
+    const adv=k<=tol;
+    return `<div class="bar"><div class="bp" style="color:${adv?'var(--green)':'var(--red)'}">${(v*100).toFixed(0)}%</div>
+      <div class="b" style="height:${Math.max(2,v/max*78)}px;background:${adv?'var(--green)':'var(--red)'}"></div>
+      <div class="bl">${k} above</div></div>`;}).join("");
+  // cutoff line after index = tol
+  const frac=(tol+1)/p.length;
+  $("#cut").style.left=`calc(${frac*100}% )`;
+  $("#cutlbl").textContent=`top-8 cutoff (≤${tol} above)`;
+  $("#distLegend").innerHTML=`<b style="color:var(--green)">Green</b> = Iran advances · <b style="color:var(--red)">red</b> = Iran misses. Iran's total chance = sum of the green bars = <b>${Math.round(pct)}%</b>.`;
+
+  $("#foot").innerHTML=`Model: Iran's 3 pts / 0 GD / 3 GF is fixed; each pending group independently yields a third-place team that beats Iran with the shown probability (Poisson-binomial over the deciders). Estimates are editable and your changes are saved in this browser.<br>
+    Built ${S.updated} · <a href="https://github.com/hlash99/iran-r32-tracker">source ↗</a> · not affiliated with FIFA.`;
+  save(); publishPreview(pct);
+}
+
+/* ── interactions ── */
+function setRes(i,r){S.threats[i].res=r;render();}
+function setQ(i,v){S.threats[i].q=clamp(v/100,0,1);render();}
+function rmThreat(i){S.threats.splice(i,1);render();}
+function rmLocked(i){(S.lockedBelow=S.lockedBelow||[]).push({team:S.lockedAbove[i].team,note:"slipped below Iran"});S.lockedAbove.splice(i,1);render();}
+function addThreat(){const L=$("#naddL").value.trim();if(!L)return;
+  S.threats.push({id:"t"+Date.now(),label:L,match:$("#naddM").value.trim(),q:0.5,res:null});
+  $("#naddL").value="";$("#naddM").value="";render();}
+function resetAll(){if(confirm("Reset everything to the June-26 baseline?")){S=JSON.parse(JSON.stringify(SEED));render();}}
+
+/* expose computed % for the dashboard preview (read from localStorage by the hub if same-origin; else baseline in data.json) */
+function publishPreview(pct){try{localStorage.setItem(LS+"_pct",JSON.stringify({pct:Math.round(pct),updated:S.updated}));}catch(e){}}
+
+render();
+</script>
+</body>
+</html>
