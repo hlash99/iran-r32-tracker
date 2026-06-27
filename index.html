@@ -82,7 +82,7 @@
 <body>
 <div class="wrap">
   <div class="crumb"><a href="https://hlash99.github.io/">← hlash99 dashboard</a></div>
-  <h1><span class="flag">🇮🇷</span> Iran — Round-of-32 Watch</h1>
+  <h1 id="h1"><span class="flag">🇮🇷</span> Iran — Round-of-32 Watch</h1>
   <p class="sub">Live probability Iran advances as one of the <b>8 best third-placed teams</b> — computed in real time from the live group tables.</p>
   <div class="live stale" id="live"><span class="dot"></span><span id="liveTxt">connecting to live feed…</span>
     <button class="btn" style="margin-left:6px;padding:3px 9px" onclick="refresh(true)">↻</button></div>
@@ -328,6 +328,10 @@ function render(R,pct,dist){
       <span class="st ${cl}">${status}</span></div>`;}).join("")
     || `<div class="err">No live group deciders affecting Iran right now.</div>`;
   iranState=R.allFinal?(pct>=50?"in":"out"):"live"; renderNext();
+  // dynamic heading + browser-tab title
+  const h1=iranState==="in"?"Iran — Into the Round of 32 ✓":iranState==="out"?"Iran — Out in the group stage":"Iran — Round-of-32 Watch";
+  $("#h1").innerHTML=`<span class="flag">🇮🇷</span> ${h1}`;
+  document.title=iranState==="in"?"🇮🇷 Iran are THROUGH ✓":iranState==="out"?"Iran — eliminated":`Iran R32: ${Math.round(pct)}%`;
 
   // distribution of # thirds above Iran (Iran in if < 8)
   const d=dist; const maxk=Math.max(2, d.reduce((m,v,i)=>v>0.001?i:m,0));
@@ -400,7 +404,12 @@ async function refresh(manual){
 function safe(f){try{return f();}catch(e){return null;}}
 refresh(); timer=setInterval(refresh,60000);
 fetchNext(); setInterval(fetchNext,240000);     // bracket changes slowly — every 4 min
-document.addEventListener("visibilitychange",()=>{if(!document.hidden){refresh();fetchNext();}});
+
+/* keep the screen awake while the tracker is open (re-acquired when tab regains focus) */
+let wakeLock=null;
+async function keepAwake(){try{if("wakeLock" in navigator && !document.hidden) wakeLock=await navigator.wakeLock.request("screen");}catch(e){}}
+keepAwake();
+document.addEventListener("visibilitychange",()=>{if(!document.hidden){keepAwake();refresh();fetchNext();}});
 </script>
 </body>
 </html>

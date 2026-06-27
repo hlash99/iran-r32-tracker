@@ -1,0 +1,38 @@
+name: snapshot
+
+# Server-side refresh of Iran's R32 odds so data.json stays current even when
+# no one's computer is on. The live page still computes in-browser when open;
+# this keeps the dashboard card + published snapshot fresh in the background.
+on:
+  schedule:
+    - cron: '*/10 * * * *'    # every 10 min (GitHub may delay under load)
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+concurrency:
+  group: snapshot
+  cancel-in-progress: false
+
+jobs:
+  snap:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Recompute snapshot
+        run: node scripts/snapshot.mjs
+      - name: Commit if changed
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          if ! git diff --quiet -- data.json; then
+            git add data.json
+            git commit -m "snapshot: Iran R32 odds $(date -u +%Y-%m-%dT%H:%MZ)"
+            git push
+          else
+            echo "no change"
+          fi
