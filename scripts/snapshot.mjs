@@ -11,9 +11,15 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
-const STAND = "https://site.api.espn.com/apis/v2/sports/soccer/fifa.world/standings?season=2026";
-const SCORE = d => `https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard?dates=${d}`;
-const IRAN = "Iran", SLOTS = 8, SIMS = 80000;
+// Configurable so the same Action can be re-pointed at a future tournament
+// (e.g. LEAGUE=fifa.wwc SEASON=2027 TEAM=...) — it idles when its tournament isn't running.
+const LEAGUE = process.env.LEAGUE || "fifa.world";
+const SEASON = process.env.SEASON || "2026";
+const IRAN   = process.env.TEAM   || "Iran";
+const STAND = `https://site.api.espn.com/apis/v2/sports/soccer/${LEAGUE}/standings?season=${SEASON}`;
+const SCORE = d => `https://site.api.espn.com/apis/site/v2/sports/soccer/${LEAGUE}/scoreboard?dates=${d}`;
+const SLOTS = 8, SIMS = 80000;
+const ymd = d => d.toISOString().slice(0, 10).replace(/-/g, "");
 
 const pois = l => { let L = Math.exp(-l), k = 0, p = 1; do { k++; p *= Math.random(); } while (p > L); return k - 1; };
 
@@ -116,12 +122,28 @@ async function findNext() {
 }
 
 async function main() {
-  const [stJ, ...scs] = await Promise.all([
-    fetch(STAND).then(r => r.json()),
-    ...["20260626", "20260627", "20260628"].map(d => fetch(SCORE(d)).then(r => r.json()).catch(() => ({}))),
-  ]);
+  // rolling activity window — also covers the last group day's matches for the sim
+  const win = `${ymd(new Date(Date.now() - 2 * 864e5))}-${ymd(new Date(Date.now() + 5 * 864e5))}`;
+  let stJ, sbJ;
+  try {
+    [stJ, sbJ] = await Promise.all([fetch(STAND).then(r => r.json()), fetch(SCORE(win)).then(r => r.json())]);
+  } catch (e) {
+    console.error("fetch failed (transient):", e.message);   // keep last good data.json; fail the run so it's visible
+    process.exit(1);
+  }
   const groups = parseStandings(stJ);
-  const matches = scs.flatMap(parseScore);
+  const events = sbJ.events || [];
+  const hasTeam = groups.flatMap(g => g.teams).some(t => t.team === IRAN);
+  const liveOrSoon = events.some(e => { const s = e.status?.type?.state; return s === "in" || s === "pre"; });
+
+  // Idle-gate: between tournaments (or if ESPN's shape changes) there's nothing to do — exit
+  // WITHOUT writing so no commit happens and the Action quietly self-quiesces. data.json is left intact.
+  if (!groups.length || !hasTeam || (!liveOrSoon && events.length === 0)) {
+    console.log(`idle — no active ${LEAGUE} ${SEASON} (groups=${groups.length}, ${IRAN}=${hasTeam}, events=${events.length}); leaving data.json unchanged.`);
+    return;
+  }
+
+  const matches = parseScore(sbJ);
   const R = compute(groups, matches);
   const next = R.allFinal && R.pct < 50 ? null : await findNext();
   const status = R.allFinal ? (R.pct >= 50 ? "advanced" : "eliminated") : "live";

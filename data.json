@@ -10,7 +10,7 @@
     "K",
     "L"
   ],
-  "baseline_pct": 92,
+  "baseline_pct": 93,
   "live": true,
   "source": "ESPN public feed (standings + scoreboard); recomputed server-side by scripts/snapshot.mjs",
   "note": "The page computes Iran's advancement probability live from the real group tables via Monte-Carlo of the remaining matches. baseline_pct is a recent snapshot for the dashboard card; the live page recomputes continuously.",

@@ -15,6 +15,9 @@
   body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
     background:var(--bg);color:var(--ink);-webkit-font-smoothing:antialiased;line-height:1.5}
   a{color:var(--accent);text-decoration:none}
+  .match a, #tableCard a, #nextCard a{color:inherit}
+  .match a:hover, #tableCard a:hover, #nextCard a:hover{text-decoration:underline}
+  .st a{cursor:pointer}
   .wrap{max-width:880px;margin:0 auto;padding:30px 16px 80px}
   .crumb{font-size:13px;color:var(--muted);margin-bottom:10px}
   h1{font-size:26px;margin:0 0 4px;font-weight:800;letter-spacing:-.5px}
@@ -108,10 +111,16 @@
 
 <script>
 const $=s=>document.querySelector(s);
-const STAND="https://site.api.espn.com/apis/v2/sports/soccer/fifa.world/standings?season=2026";
-const SCORE=d=>`https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard?dates=${d}`;
+const LEAGUE="fifa.world", SEASON=2026;            // 2026 men's WC — swap LEAGUE/SEASON for a future tournament
+const STAND=`https://site.api.espn.com/apis/v2/sports/soccer/${LEAGUE}/standings?season=${SEASON}`;
+const SCORE=d=>`https://site.api.espn.com/apis/site/v2/sports/soccer/${LEAGUE}/scoreboard?dates=${d}`;
+const KO_RANGE="20260628-20260704";
+const WATCH="https://www.foxsports.com/live";      // FOX carries the 2026 WC (US, English) — live games link here
 const IRAN="Iran", SLOTS=8, SIMS=100000;
-const dates=["20260626","20260627","20260628"];   // window covering final group matches
+const ymd=d=>d.toISOString().slice(0,10).replace(/-/g,"");
+const scoreWindow=()=>`${ymd(new Date(Date.now()-864e5))}-${ymd(new Date(Date.now()+3*864e5))}`;  // rolling: yesterday → +3d
+const esc=s=>(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/"/g,"&quot;");
+const A=(href,txt,cls)=>href?`<a href="${esc(href)}" target="_blank" rel="noopener"${cls?` class="${cls}"`:""}>${txt}</a>`:txt;
 let timer=null, lastStamp=0, feedOk=true, pendingLive=false, mcRun=0, nextInfo=undefined, iranState="live";
 
 /* live "grabbed Xs ago" badge — ticks every second, flags staleness */
@@ -134,7 +143,8 @@ function parseStandings(j){
   (function walk(n){ if(!n)return;
     if(n.standings&&n.standings.entries){
       const teams=n.standings.entries.map(e=>{const s={};(e.stats||[]).forEach(x=>s[x.name]=x.value);
-        return {team:e.team.displayName,P:s.gamesPlayed|0,pts:s.points|0,gd:s.pointDifferential|0,gf:s.pointsFor|0};});
+        return {team:e.team.displayName,P:s.gamesPlayed|0,pts:s.points|0,gd:s.pointDifferential|0,gf:s.pointsFor|0,
+                link:(e.team.links&&e.team.links[0]&&e.team.links[0].href)||null};});
       groups.push({group:n.name,teams});
     }
     (n.children||[]).forEach(walk);(n.groups||[]).forEach(walk);
@@ -145,9 +155,12 @@ function parseScore(j){
   return (j.events||[]).map(e=>{const c=e.competitions[0],st=e.status;
     const cs=c.competitors;
     const home=cs.find(x=>x.homeAway==="home")||cs[0], away=cs.find(x=>x.homeAway==="away")||cs[1];
+    const elink=((e.links&&(e.links.find(l=>l.rel&&l.rel.includes("summary"))||e.links[0]))||{}).href||null;
     return {home:home.team.displayName,away:away.team.displayName, date:e.date,
       hs:+home.score||0,as:+away.score||0,
       state:st.type.state, detail:st.type.shortDetail||st.type.detail,
+      link:elink, hlink:(home.team.links&&home.team.links[0]&&home.team.links[0].href)||null,
+      alink:(away.team.links&&away.team.links[0]&&away.team.links[0].href)||null,
       min:st.type.state==="in"?(st.period>=2?45+(parseInt(st.displayClock)||0):(parseInt(st.displayClock)||0)):(st.type.state==="post"?90:0)};
   });
 }
@@ -196,7 +209,7 @@ function compute(groups, matches){
             P:new Array(n),GD:new Array(n),GF:new Array(n),ord:ts.map((_,i)=>i),nf};
   });
   const baseAbove= thirds.filter(r=>r.done && r.t.team!==IRAN && aboveIran(r.t,iran)).length;
-  return {iran,iranPos,ranked,pending,liveMatches,matchByGroup,teamGroup,
+  return {iran,iranPos,ranked,pending,liveMatches,matchByGroup,teamGroup,allMatches:matches,
           ip,igd,igf,PG,baseAbove, allFinal:pending.length===0};
 }
 
@@ -301,32 +314,40 @@ function render(R,pct,dist){
     const isIran=r.t.team===IRAN, pos=i+1;
     const tag=r.done?`<span class="tag">final</span>`:`<span class="tag live">live</span>`;
     return `<tr class="${isIran?"iran":""} ${pos===SLOTS?"cut":""}">
-      <td>${pos}</td><td>${isIran?"🇮🇷 ":""}${r.t.team} <span style="color:var(--muted);font-size:11px">${r.group.replace("Group ","Grp ")}</span></td>
+      <td>${pos}</td><td>${isIran?"🇮🇷 ":""}${A(r.t.link,esc(r.t.team))} <span style="color:var(--muted);font-size:11px">${r.group.replace("Group ","Grp ")}</span></td>
       <td>${r.t.pts}</td><td>${r.t.gd>=0?"+":""}${r.t.gd}</td><td>${r.t.gf}</td><td>${tag}</td></tr>`;}).join("");
   $("#tableCard").innerHTML=`<table><thead><tr><th>#</th><th>Team</th><th>Pts</th><th>GD</th><th>GF</th><th></th></tr></thead><tbody>${rows}</tbody></table>
     <div class="legend" style="margin-top:8px">Dashed line = top-8 cutoff. Ranked by points → goal difference → goals for (FIFA tiebreakers).</div>`;
 
-  // matches + dynamic heading
-  const decMs=R.liveMatches.length?R.liveMatches:Object.values(R.matchByGroup).flat().filter(m=>R.pending.includes(R.teamGroup[m.home]));
-  let label="Group deciders";
-  if(R.allFinal) label="Final group matches";
-  else if(decMs.some(m=>m.state==="in")) label="Deciders — LIVE now";
-  else { const soon=decMs.filter(m=>m.state==="pre").map(m=>new Date(m.date)).sort((a,b)=>a-b)[0];
-    if(soon){const now=new Date(), tmrw=new Date(now.getTime()+864e5);
-      label=soon.toDateString()===now.toDateString()?"Today's deciders":
-            soon.toDateString()===tmrw.toDateString()?"Tomorrow's deciders":"Upcoming deciders";} }
-  $("#decLabel").textContent=label;
-  $("#decHdr").textContent=R.allFinal?"— all final":"";
+  // ── general live board: all live + today's matches (+ a few upcoming) — stays useful all tournament ──
+  const all=R.allMatches||[], todayStr=new Date().toDateString();
+  const rank={in:0,pre:1,post:2};
+  let board=all.filter(m=>m.state==="in" || new Date(m.date).toDateString()===todayStr)
+               .sort((a,b)=>rank[a.state]-rank[b.state] || new Date(a.date)-new Date(b.date));
+  if(board.filter(m=>m.state!=="post").length<2){                      // quiet day → show upcoming fixtures
+    const up=all.filter(m=>m.state==="pre" && new Date(m.date)>Date.now()).sort((a,b)=>new Date(a.date)-new Date(b.date));
+    board=[...board.filter(m=>m.state!=="pre"), ...up].slice(0,10);
+  }
+  const nLive=all.filter(m=>m.state==="in").length;
+  $("#decLabel").textContent = nLive?`Live now · ${nLive} match${nLive>1?"es":""}`
+    : board.some(m=>m.state==="pre"&&new Date(m.date).toDateString()===todayStr)?"Today's matches"
+    : board.length?"Recent & upcoming":"No matches in window";
+  $("#decHdr").textContent="";
+  const pend=new Set(R.pending);
   const kick=m=>{const d=new Date(m.date),now=new Date(),t=d.toLocaleTimeString([],{hour:'numeric',minute:'2-digit'});
     return d.toDateString()===now.toDateString()?t:d.toLocaleDateString([],{weekday:'short'})+" "+t;};
-  $("#matchCard").innerHTML=(decMs.length?decMs:Object.values(R.matchByGroup).flat()).slice(0,8).map(m=>{
+  $("#matchCard").innerHTML=board.slice(0,12).map(m=>{
+    const gp=R.teamGroup[m.home], dec=gp&&pend.has(gp);
     const cl=m.state==="post"?"fin":m.state==="in"?"liv":"pre";
-    const sc=m.state==="pre"?"–":`${m.hs}–${m.as}`;
-    const status=m.state==="in"?m.detail:m.state==="post"?"FT":kick(m);
-    return `<div class="match"><span class="g">${(R.teamGroup[m.home]||"").replace("Group ","Grp ")}</span>
-      <span class="tm">${m.home} v ${m.away}</span><span class="sc">${sc}</span>
-      <span class="st ${cl}">${status}</span></div>`;}).join("")
-    || `<div class="err">No live group deciders affecting Iran right now.</div>`;
+    const scTxt=m.state==="pre"?"–":`${m.hs}–${m.as}`;
+    const sc=m.state==="pre"?"–":A(m.link,scTxt);
+    const status=m.state==="in"?A(WATCH,"▶ "+esc(m.detail)):m.state==="post"?A(m.link,"FT"):A(m.link,kick(m));
+    const tag=gp?gp.replace("Group ","").trim():(new Date(m.date)>Date.now()?"R32":"");
+    return `<div class="match"${dec?' title="affects Iran"':''}>
+      <span class="g">${dec?"🇮🇷 ":""}${esc(tag)}</span>
+      <span class="tm">${A(m.hlink,esc(m.home))} <span style="color:var(--muted)">v</span> ${A(m.alink,esc(m.away))}</span>
+      <span class="sc">${sc}</span><span class="st ${cl}" style="width:auto;text-align:right">${status}</span></div>`;}).join("")
+    || `<div class="err">No matches in the current window — the tournament may be between rounds.</div>`;
   iranState=R.allFinal?(pct>=50?"in":"out"):"live"; renderNext();
   // dynamic heading + browser-tab title
   const h1=iranState==="in"?"Iran — Into the Round of 32 ✓":iranState==="out"?"Iran — Out in the group stage":"Iran — Round-of-32 Watch";
@@ -358,14 +379,16 @@ function fmtKO(s){const d=new Date(s);return d.toLocaleDateString([],{weekday:"s
   +" · "+d.toLocaleTimeString([],{hour:"numeric",minute:"2-digit"});}
 async function fetchNext(){
   try{
-    const j=await fetch(SCORE("20260628-20260704")).then(r=>r.json());
+    const j=await fetch(SCORE(KO_RANGE)).then(r=>r.json());
     const evs=(j.events||[]).map(e=>{const c=e.competitions[0];
-      return {date:e.date, venue:(c.venue&&c.venue.fullName)||"", state:e.status.type.state,
-        detail:e.status.type.shortDetail||"", teams:c.competitors.map(x=>({n:x.team.displayName,s:x.score}))};});
+      return {date:e.date, venue:(c.venue&&c.venue.fullName)||"", state:e.status.type.state, detail:e.status.type.shortDetail||"",
+        link:((e.links&&(e.links.find(l=>l.rel&&l.rel.includes("summary"))||e.links[0]))||{}).href||null,
+        teams:c.competitors.map(x=>({n:x.team.displayName,s:x.score,link:(x.team.links&&x.team.links[0]&&x.team.links[0].href)||null}))};});
     let m=evs.find(e=>e.teams.some(t=>/^iran$/i.test(t.n))); const confirmed=!!m;
     if(!m) m=evs.find(e=>e.teams.some(t=>/^third place group/i.test(t.n)
       && t.n.replace(/^third place group /i,"").split("/").map(s=>s.trim()).includes("G")));
-    nextInfo=m?{opp:(m.teams.find(t=>!/^iran$/i.test(t.n))||{}).n||"TBD", date:m.date, venue:m.venue,
+    const oppT=m?(m.teams.find(t=>!/^iran$/i.test(t.n))||{}):{};
+    nextInfo=m?{opp:oppT.n||"TBD", oppLink:oppT.link||null, matchLink:m.link, date:m.date, venue:m.venue,
       confirmed, state:m.state, detail:m.detail, score:m.teams.map(t=>t.s).join("–")}:null;
   }catch(e){ if(nextInfo===undefined) nextInfo=null; }
   renderNext();
@@ -375,33 +398,49 @@ function renderNext(){
   if(iranState==="out"){el.innerHTML=`<div class="err">Iran were eliminated in the group stage — no Round-of-32 match.</div>`;return;}
   if(nextInfo===undefined) return;                 // still loading
   if(!nextInfo){el.innerHTML=`<div class="err">Round-of-32 matchup is set once the bracket fills in — check back after the group stage.</div>`;return;}
-  const N=nextInfo, line=N.state==="pre"?fmtKO(N.date):(N.state==="in"?`${N.score} · ${N.detail}`:`${N.score} · FT`);
+  const N=nextInfo;
+  const line=N.state==="in"?A(WATCH,"▶ "+esc(N.score)+" · "+esc(N.detail))
+           :N.state==="post"?A(N.matchLink,esc(N.score)+" · FT")
+           :A(N.matchLink,fmtKO(N.date));
   el.innerHTML=`<div class="match" style="align-items:flex-start">
-    <span class="tm"><b>🇮🇷 Iran vs ${N.opp}</b><div style="font-size:12px;color:var(--muted);margin-top:2px">${N.venue||"Round of 32"}</div></span>
+    <span class="tm"><b>🇮🇷 Iran vs ${A(N.oppLink,esc(N.opp))}</b><div style="font-size:12px;color:var(--muted);margin-top:2px">${esc(N.venue)||"Round of 32"}</div></span>
     <span class="st ${N.state==='in'?'liv':N.state==='post'?'fin':'pre'}" style="width:auto;text-align:right;white-space:nowrap">${line}</span></div>
     <div class="legend" style="margin-top:8px">${N.confirmed?"✓ Confirmed Round-of-32 matchup."
-      :"Projected — <b>if</b> Iran advance as a best third. Among the open R32 slots, a Group-G third can only be placed opposite <b>"+N.opp+"</b>."}</div>`;
+      :"Projected — <b>if</b> Iran advance as a best third. Among the open R32 slots, a Group-G third can only be placed opposite <b>"+esc(N.opp)+"</b>."}</div>`;
 }
 
-/* ── fetch loop ── */
-async function refresh(manual){
+/* run compute+MC+render for a parsed (groups,matches); guarded so a bad shape can't blank the page */
+function process(groups, matches, stamp, ok){
+  const R=compute(groups,matches);
+  lastStamp=stamp; feedOk=ok; pendingLive=R.pending.length>0; updateLiveBadge();
+  const myRun=++mcRun;
+  runMC(R,(pct,dist)=>{ if(myRun!==mcRun) return;
+    try{ render(R,pct,dist); }catch(err){ console.warn("render failed",err); }
+    localStorage.setItem("iranR32_live",JSON.stringify({pct:Math.round(pct),pos:R.iranPos,allFinal:R.allFinal,stamp})); });
+}
+/* ── fetch loop (with a last-good cache + data.json fallback so an ESPN change can't break the page) ── */
+async function refresh(){
   try{
-    const [stJ,...scs]=await Promise.all([fetch(STAND).then(r=>r.json()),...dates.map(d=>fetch(SCORE(d)).then(r=>r.json()).catch(()=>({})))]);
-    const groups=parseStandings(stJ);
-    if(!groups.length) throw new Error("empty standings");
-    const matches=scs.flatMap(parseScore);
-    const R=compute(groups,matches);
-    lastStamp=Date.now(); feedOk=true; pendingLive=R.pending.length>0; updateLiveBadge();
-    const myRun=++mcRun;
-    runMC(R,(pct,dist)=>{ if(myRun!==mcRun) return;     // ignore a superseded run
-      render(R,pct,dist);
-      localStorage.setItem("iranR32_live",JSON.stringify({pct:Math.round(pct),pos:R.iranPos,allFinal:R.allFinal,stamp:lastStamp})); });
+    const [stJ,sbJ]=await Promise.all([fetch(STAND).then(r=>r.json()), fetch(SCORE(scoreWindow())).then(r=>r.json())]);
+    const groups=parseStandings(stJ), matches=parseScore(sbJ);
+    if(!groups.length || !groups.flatMap(g=>g.teams).some(t=>t.team===IRAN)) throw new Error("unexpected feed shape");
+    try{ localStorage.setItem("iranR32_cache",JSON.stringify({stamp:Date.now(),groups,matches})); }catch(_){}
+    process(groups, matches, Date.now(), true);
   }catch(e){
-    feedOk=false; updateLiveBadge();
-    if(!document.querySelector("#tableCard table")) $("#tableMsg").textContent="Couldn't reach the live feed. It retries every 60s.";
+    feedOk=false;
+    // 1) fall back to last-good cached feed (renders a full, if stale, page)
+    let used=false;
+    try{ const c=JSON.parse(localStorage.getItem("iranR32_cache"));
+      if(c&&c.groups&&c.groups.length){ process(c.groups, c.matches, c.stamp, false); used=true; } }catch(_){}
+    // 2) ultimate fallback: the server snapshot in data.json (at least the headline number)
+    if(!used){ try{ const d=await fetch("data.json?_="+Date.now()).then(r=>r.json());
+        if(typeof d.iran_pct==="number"){ if(!GG.built) buildGauge(); GG.tgt=(d.iran_pct-50)/50*90; GG.jit=0;
+          $("#gcap").innerHTML=`<div class="n" style="color:var(--muted)">${d.iran_pct}%</div><div class="l">last server snapshot</div>`;
+          lastStamp=Date.parse(d.server_updated||d.updated)||Date.now(); used=true; } }catch(_){} }
+    updateLiveBadge();
+    if(!document.querySelector("#tableCard table")) $("#tableMsg").textContent="Live feed hiccup — showing last-known data, retrying every 60s.";
   }
 }
-function safe(f){try{return f();}catch(e){return null;}}
 refresh(); timer=setInterval(refresh,60000);
 fetchNext(); setInterval(fetchNext,240000);     // bracket changes slowly — every 4 min
 
