@@ -84,15 +84,15 @@
   .bar .bp{font-size:11px;font-weight:600}
   .legend{font-size:12px;color:var(--muted);margin-top:8px}
   /* knockout bracket */
-  .bracket{display:flex;gap:16px;overflow-x:auto;padding:4px 2px 12px;-webkit-overflow-scrolling:touch}
-  .bround{display:flex;flex-direction:column;justify-content:space-around;gap:8px;min-width:138px;flex:none}
-  .bround .rh{font-size:10px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);text-align:center;font-weight:700;margin-bottom:2px}
-  .bx{background:var(--surface2);border:1px solid var(--line);border-radius:9px;padding:6px 8px}
+  .bracket{display:flex;gap:9px;overflow-x:auto;padding:2px 2px 8px;-webkit-overflow-scrolling:touch;align-items:stretch}
+  .bround{display:flex;flex-direction:column;justify-content:space-around;gap:5px;min-width:108px;flex:none}
+  .bround .rh{font-size:9.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);text-align:center;font-weight:700;margin-bottom:1px}
+  .bx{background:var(--surface2);border:1px solid var(--line);border-radius:8px;padding:4px 7px}
   .bx.iran{border-color:var(--amber);box-shadow:inset 0 0 0 1px var(--amber)}
-  .bx .tm{display:flex;justify-content:space-between;gap:6px;white-space:nowrap;font-size:12.5px;line-height:1.5}
+  .bx .tm{display:flex;justify-content:space-between;gap:5px;white-space:nowrap;font-size:11.5px;line-height:1.4}
   .bx .tm.win{font-weight:750}
   .bx .tm .sc{color:var(--muted);font-variant-numeric:tabular-nums}
-  .bx .meta{font-size:10px;color:var(--muted);margin-top:3px;text-align:right}
+  .bx .meta{font-size:9px;color:var(--muted);margin-top:1px;text-align:right}
   .bx .meta a{color:inherit} .bx .meta .liv{color:var(--amber);font-weight:600}
   .bx a{color:inherit} .bx a:hover{text-decoration:underline}
   footer{margin-top:32px;color:var(--muted);font-size:11.5px;line-height:1.7;text-align:center}
@@ -468,12 +468,20 @@ function renderBracket(){
   if(r32.length<16 || set<8){
     el.innerHTML=`<div class="err">The knockout bracket fills in once the group stage ends — check back after tonight's matches.</div>`; return;
   }
-  const cols=ROUNDS.map(([slug,label])=>{
-    const ms=evs.filter(e=>e.round===slug).sort((a,b)=>new Date(a.date)-new Date(b.date)||(""+a.link).localeCompare(""+b.link));
-    return ms.length?`<div class="bround"><div class="rh">${label}</div>${ms.map(bxHTML).join("")}</div>`:"";
-  }).join("");
-  el.innerHTML=`<div class="bracket">${cols}</div>
-    <div class="legend" style="margin-top:4px">Live from ESPN · <b style="color:var(--amber)">gold</b> = Iran's path · scroll → for later rounds · scores update in real time.</div>`;
+  const byRound={};
+  for(const [slug] of ROUNDS) byRound[slug]=evs.filter(e=>e.round===slug)
+    .sort((a,b)=>new Date(a.date)-new Date(b.date)||(""+a.link).localeCompare(""+b.link));
+  // two-sided layout: half the matches on the left, half on the right, Final in the middle → ~half the height
+  const half=(slug,side)=>{const a=byRound[slug]||[],m=Math.ceil(a.length/2);return side==="L"?a.slice(0,m):a.slice(m);};
+  const col=(slug,label,side)=>{const ms=half(slug,side);return ms.length?`<div class="bround"><div class="rh">${label}</div>${ms.map(bxHTML).join("")}</div>`:"";};
+  const fin=byRound["final"]||[];
+  const finCol=fin.length?`<div class="bround"><div class="rh">Final</div>${fin.map(bxHTML).join("")}</div>`:"";
+  el.innerHTML=`<div class="bracket">
+      ${col("round-of-32","R32","L")}${col("round-of-16","R16","L")}${col("quarterfinals","QF","L")}${col("semifinals","SF","L")}
+      ${finCol}
+      ${col("semifinals","SF","R")}${col("quarterfinals","QF","R")}${col("round-of-16","R16","R")}${col("round-of-32","R32","R")}
+    </div>
+    <div class="legend" style="margin-top:4px">Live from ESPN · <b style="color:var(--amber)">gold</b> = Iran's path · two halves meet at the Final · scores update in real time.</div>`;
 }
 
 /* run compute+MC+render for a parsed (groups,matches); guarded so a bad shape can't blank the page */
