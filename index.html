@@ -491,7 +491,9 @@ function renderNext(){
   if(nextInfo===undefined) return;                 // still loading
   if(!nextInfo){el.innerHTML=`<div class="err">Round-of-32 matchup is set once the bracket fills in — check back after the group stage.</div>`;return;}
   const N=nextInfo;
-  const tix="https://seatgeek.com/search?search="+encodeURIComponent("Iran "+(N.opp&&N.opp!=="TBD"?N.opp:"World Cup"));
+  // Iran's R32 slot is the July 2, 8pm fixture at BC Place — direct SeatGeek event page for tickets
+  const TIX_R32="https://seatgeek.com/fifa-world-cup-tickets/international-soccer/2026-07-02-8-pm/17249644";
+  const tix=/bc place/i.test(N.venue||"")?TIX_R32:"https://seatgeek.com/fifa-world-cup-tickets";
   const line=N.state==="in"?A(WATCH,"▶ "+esc(N.score)+" · "+esc(N.detail))
            :N.state==="post"?A(N.matchLink,esc(N.score)+" · FT")
            :A(N.matchLink,fmtKO(N.date));
