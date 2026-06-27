@@ -109,7 +109,21 @@ const STAND="https://site.api.espn.com/apis/v2/sports/soccer/fifa.world/standing
 const SCORE=d=>`https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard?dates=${d}`;
 const IRAN="Iran", SLOTS=8, SIMS=30000;
 const dates=["20260626","20260627","20260628"];   // window covering final group matches
-let timer=null;
+let timer=null, lastStamp=0, feedOk=true, pendingLive=false;
+
+/* live "grabbed Xs ago" badge — ticks every second, flags staleness */
+function updateLiveBadge(){
+  const el=$("#live"), dot=$("#live .dot"), txt=$("#liveTxt");
+  if(!lastStamp){el.className="live stale";if(dot)dot.className="dot";
+    txt.textContent=feedOk?"connecting to live feed…":"live feed unavailable — retrying every 60s…";return;}
+  const age=Math.round((Date.now()-lastStamp)/1000), stale=!feedOk||age>90;
+  el.className="live"+(stale?" stale":"");
+  if(dot)dot.className="dot"+(!stale&&pendingLive?" pulse":"");
+  const ageTxt=age<1?"just now":age<60?age+"s ago":Math.floor(age/60)+"m "+(age%60)+"s ago";
+  txt.textContent=(feedOk?(stale?"STALE":"LIVE"):"FEED DOWN")+" · ESPN · grabbed "
+    +new Date(lastStamp).toLocaleTimeString()+" · "+ageTxt;
+}
+setInterval(updateLiveBadge,1000);
 
 /* ── ESPN parsing ── */
 function parseStandings(j){
@@ -210,7 +224,9 @@ function buildGauge(){
     const t1=pTheta(i/N*100),t2=pTheta((i+1)/N*100);
     const [ax,ay]=polar(rbo,t1),[bx,by]=polar(rbo,t2),[cx2,cy2]=polar(rbi,t2),[dx,dy]=polar(rbi,t1);
     const tt=((i+0.5)/N-0.5)*2;                    // -1 (left) … +1 (right)
-    bands+=`<path d="M${ax} ${ay} L${bx} ${by} L${cx2} ${cy2} L${dx} ${dy} Z" fill="${rgba(tt<0?RED:GRN,0.13+0.62*Math.abs(tt))}"/>`;
+    const e=tt<0?[244,115,107]:[58,210,159], f=Math.abs(tt);   // red ← white → green (Iran flag)
+    const cr=Math.round(255+(e[0]-255)*f),cg=Math.round(255+(e[1]-255)*f),cb=Math.round(255+(e[2]-255)*f);
+    bands+=`<path d="M${ax} ${ay} L${bx} ${by} L${cx2} ${cy2} L${dx} ${dy} Z" fill="rgba(${cr},${cg},${cb},0.92)"/>`;
   }
   let ticks="";
   for(let p=0;p<=100;p+=2.5){const major=p%25===0,t=pTheta(p);
@@ -299,10 +315,7 @@ function render(R,stamp,live){
   $("#distLegend").innerHTML=`X-axis = total third-placed teams finishing above Iran. <b style="color:var(--green)">Green</b> (≤7) = Iran top-8 & advances; <b style="color:var(--red)">red</b> (8+) = out. Iran's chance = green total = <b>${Math.round(pct)}%</b>.`;
 
   // live badge + footer
-  const ago=Math.round((Date.now()-stamp)/1000);
-  $("#live").className="live"+(live?"":" stale");
-  $("#live .dot").className="dot"+(R.pending.length&&live?" pulse":"");
-  $("#liveTxt").textContent=`${live?"LIVE":"last feed"} · ESPN · updated ${new Date(stamp).toLocaleTimeString()} · auto-refresh 60s`;
+  lastStamp=stamp; feedOk=true; pendingLive=R.pending.length>0; updateLiveBadge();
   $("#foot").innerHTML=`Live group tables & scores from ESPN's public feed, pulled in your browser every 60s. Probability via ${SIMS.toLocaleString()}-run Monte-Carlo of the remaining group matches (Poisson goal model, form-weighted). Iran's 3 pts / 0 GD / 3 GF is locked; it advances unless 8+ thirds finish above it.<br>
     <a href="https://github.com/hlash99/iran-r32-tracker">source ↗</a> · not affiliated with FIFA or ESPN.`;
 }
@@ -319,9 +332,7 @@ async function refresh(manual){
     render(R,stamp,true);
     localStorage.setItem("iranR32_live",JSON.stringify({pct:Math.round(R.pct),pos:R.iranPos,allFinal:R.allFinal,stamp}));
   }catch(e){
-    const cached=safe(()=>JSON.parse(localStorage.getItem("iranR32_live")));
-    $("#live").className="live stale";$("#live .dot").className="dot";
-    $("#liveTxt").textContent="live feed unavailable — "+(e.message||e)+(cached?` (showing last ${new Date(cached.stamp).toLocaleTimeString()})`:"");
+    feedOk=false; updateLiveBadge();
     if(!document.querySelector("#tableCard table")) $("#tableMsg").textContent="Couldn't reach the live feed. It retries every 60s.";
   }
 }
