@@ -1,5 +1,5 @@
 {
-  "updated": "2026-06-28T20:58:59Z",
+  "updated": "2026-06-28T21:16:13Z",
   "team": "Iran",
   "group": "G",
   "status": "3rd in Group G · 3 pts · 0 GD · 3 GF — chasing a best-third spot",
@@ -10,7 +10,7 @@
   "live": true,
   "source": "ESPN public feed (standings + scoreboard); recomputed server-side by scripts/snapshot.mjs",
   "note": "The page computes Iran's advancement probability live from the real group tables via Monte-Carlo of the remaining matches. baseline_pct is a recent snapshot for the dashboard card; the live page recomputes continuously.",
-  "server_updated": "2026-06-28T20:58:59Z",
+  "server_updated": "2026-06-28T21:16:13Z",
   "iran_pct": 0,
   "iran_pos": 9,
   "iran_status": "eliminated",
@@ -18,14 +18,14 @@
   "next_kickoff": null,
   "next_confirmed": null,
   "favorite": "Spain",
-  "favorite_pct": 22,
+  "favorite_pct": 23,
   "iran_pct_raw": 0,
   "favorite_pct_model": 20,
   "favorite_pct_market": 9,
   "contenders": [
     {
       "team": "Spain",
-      "pct": 22,
+      "pct": 23,
       "pct_model": 20,
       "pct_market": 9
     },
@@ -39,7 +39,7 @@
       "team": "Netherlands",
       "pct": 11,
       "pct_model": 9,
-      "pct_market": 6
+      "pct_market": 5
     },
     {
       "team": "Germany",
@@ -49,18 +49,18 @@
     },
     {
       "team": "Mexico",
-      "pct": 9,
+      "pct": 8,
       "pct_model": 8,
       "pct_market": 3
     },
     {
-      "team": "Belgium",
+      "team": "Switzerland",
       "pct": 4,
-      "pct_model": 5,
+      "pct_model": 6,
       "pct_market": 1
     },
     {
-      "team": "Switzerland",
+      "team": "Belgium",
       "pct": 4,
       "pct_model": 5,
       "pct_market": 1
@@ -84,13 +84,13 @@
       "pct_market": 1
     },
     {
-      "team": "Ivory Coast",
+      "team": "Canada",
       "pct": 2,
       "pct_model": 2,
       "pct_market": 0
     },
     {
-      "team": "Canada",
+      "team": "Ivory Coast",
       "pct": 2,
       "pct_model": 2,
       "pct_market": 0
@@ -120,25 +120,25 @@
       "pct_market": 0
     },
     {
-      "team": "Australia",
-      "pct": 1,
-      "pct_model": 1,
-      "pct_market": 0
-    },
-    {
-      "team": "Türkiye",
-      "pct": 1,
-      "pct_model": 1,
-      "pct_market": 0
-    },
-    {
       "team": "Iran",
       "pct": 1,
       "pct_model": 1,
       "pct_market": 0
     },
     {
+      "team": "Australia",
+      "pct": 1,
+      "pct_model": 1,
+      "pct_market": 0
+    },
+    {
       "team": "Egypt",
+      "pct": 1,
+      "pct_model": 1,
+      "pct_market": 0
+    },
+    {
+      "team": "Türkiye",
       "pct": 1,
       "pct_model": 1,
       "pct_market": 0
@@ -151,6 +151,12 @@
     },
     {
       "team": "Paraguay",
+      "pct": 1,
+      "pct_model": 1,
+      "pct_market": 0
+    },
+    {
+      "team": "South Korea",
       "pct": 1,
       "pct_model": 1,
       "pct_market": 0
