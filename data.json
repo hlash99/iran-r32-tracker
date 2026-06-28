@@ -1,5 +1,5 @@
 {
-  "updated": "2026-06-28T22:18:15Z",
+  "updated": "2026-06-28T23:34:02Z",
   "team": "Iran",
   "group": "G",
   "status": "3rd in Group G · 3 pts · 0 GD · 3 GF — chasing a best-third spot",
@@ -10,7 +10,7 @@
   "live": true,
   "source": "ESPN public feed (standings + scoreboard); recomputed server-side by scripts/snapshot.mjs",
   "note": "The page computes Iran's advancement probability live from the real group tables via Monte-Carlo of the remaining matches. baseline_pct is a recent snapshot for the dashboard card; the live page recomputes continuously.",
-  "server_updated": "2026-06-28T22:18:15Z",
+  "server_updated": "2026-06-28T23:34:02Z",
   "iran_pct": 0,
   "iran_pos": 9,
   "iran_status": "eliminated",
@@ -20,13 +20,13 @@
   "favorite": "Spain",
   "favorite_pct": 23,
   "iran_pct_raw": 0,
-  "favorite_pct_model": 20,
+  "favorite_pct_model": 21,
   "favorite_pct_market": 9,
   "contenders": [
     {
       "team": "Spain",
       "pct": 23,
-      "pct_model": 20,
+      "pct_model": 21,
       "pct_market": 9,
       "record": "2-1-0"
     },
@@ -53,7 +53,7 @@
     },
     {
       "team": "Mexico",
-      "pct": 8,
+      "pct": 9,
       "pct_model": 8,
       "pct_market": 3,
       "record": "3-0-0"
@@ -108,18 +108,18 @@
       "record": "2-1-1"
     },
     {
-      "team": "Ecuador",
-      "pct": 1,
-      "pct_model": 1,
-      "pct_market": 0,
-      "record": "1-1-1"
-    },
-    {
       "team": "Uruguay",
       "pct": 1,
       "pct_model": 2,
       "pct_market": 0,
       "record": "0-2-1"
+    },
+    {
+      "team": "Ecuador",
+      "pct": 1,
+      "pct_model": 1,
+      "pct_market": 0,
+      "record": "1-1-1"
     },
     {
       "team": "Czechia",
@@ -131,7 +131,14 @@
     {
       "team": "Sweden",
       "pct": 1,
-      "pct_model": 2,
+      "pct_model": 1,
+      "pct_market": 0,
+      "record": "1-1-1"
+    },
+    {
+      "team": "Australia",
+      "pct": 1,
+      "pct_model": 1,
       "pct_market": 0,
       "record": "1-1-1"
     },
@@ -143,13 +150,6 @@
       "record": "0-3-0"
     },
     {
-      "team": "Egypt",
-      "pct": 1,
-      "pct_model": 1,
-      "pct_market": 0,
-      "record": "1-2-0"
-    },
-    {
       "team": "Türkiye",
       "pct": 1,
       "pct_model": 1,
@@ -157,11 +157,11 @@
       "record": "1-0-2"
     },
     {
-      "team": "Australia",
+      "team": "Egypt",
       "pct": 1,
       "pct_model": 1,
       "pct_market": 0,
-      "record": "1-1-1"
+      "record": "1-2-0"
     },
     {
       "team": "Scotland",
