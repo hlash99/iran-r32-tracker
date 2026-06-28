@@ -181,7 +181,7 @@
     </section>
 
     <section class="block" data-block="next"><span class="grip" draggable="true" title="Drag to reorder">⠿</span>
-      <h2>Next up · Round of 32</h2>
+      <h2 id="nextLabel">Next up · Round of 32</h2>
       <div class="card" id="nextCard"><div class="err">loading bracket…</div></div>
     </section>
 
@@ -269,7 +269,15 @@ function compute(groups, matches){
   if(!iran) throw new Error("Iran not found in feed");
   // map each non-final match to its group
   const teamGroup={}; groups.forEach(g=>g.teams.forEach(t=>teamGroup[t.team]=g.group));
-  const pendGroups=new Set(groups.filter(g=>g.teams.some(t=>t.P<3)).map(g=>g.group));
+  // A group is only truly final when all its matches have actually ended. ESPN bumps gamesPlayed
+  // (and provisional points/GD) the instant a match kicks off, so judging "done" on P>=3 alone used
+  // to mark a still-live group final at half-time — locking in the partial score and snapping the
+  // meter to 100%/0% before the whistle. Any group with a live match stays pending so the
+  // Monte-Carlo keeps simulating its remaining minutes from the current score.
+  // only a live GROUP-STAGE match counts (both teams in the same group); knockout games are inter-group
+  const liveGroups=new Set(); matches.forEach(m=>{ if(m.state==="in"){const gh=teamGroup[m.home],ga=teamGroup[m.away]; if(gh&&gh===ga)liveGroups.add(gh);} });
+  const groupDone=g=>g.teams.every(x=>x.P>=3)&&!liveGroups.has(g.group);
+  const pendGroups=new Set(groups.filter(g=>!groupDone(g)).map(g=>g.group));
   const liveMatches=matches.filter(m=>teamGroup[m.home]&&pendGroups.has(teamGroup[m.home])&&m.state!=="post");
   const matchByGroup={}; matches.forEach(m=>{const gp=teamGroup[m.home]; if(gp){(matchByGroup[gp]=matchByGroup[gp]||[]).push(m);} });
 
@@ -277,7 +285,7 @@ function compute(groups, matches){
   const strength={}; groups.forEach(g=>g.teams.forEach(t=>{const p=Math.max(1,t.P); strength[t.team]=t.pts/p+0.3*t.gd/p;}));
 
   // current third-place table
-  const thirds=groups.map(g=>({group:g.group, t:thirdOf(g), done:g.teams.every(x=>x.P>=3)}));
+  const thirds=groups.map(g=>({group:g.group, t:thirdOf(g), done:groupDone(g)}));
   const ranked=thirds.slice().sort((a,b)=>b.t.pts-a.t.pts||b.t.gd-a.t.gd||b.t.gf-a.t.gf);
   const iranPos=ranked.findIndex(r=>r.t.team===IRAN)+1;
   const pending=thirds.filter(r=>!r.done).map(r=>r.group);
@@ -666,7 +674,32 @@ async function fetchNext(){
 }
 function renderNext(){
   const el=$("#nextCard"); if(!el) return;
-  if(iranState==="out"){el.innerHTML=`<div class="err">Iran were eliminated in the group stage — no Round-of-32 match.</div>`;return;}
+  // Iran out → the "next Iran match" is moot, so this block tracks the title favorite's next
+  // knockout fixture (matches the pivoted gauge + table); falls back to the next fixture overall.
+  if(iranState==="out"){
+    const lbl=$("#nextLabel"), fav=(SRV&&SRV.favorite)||null;
+    const evs=(KO||[]).filter(e=>e.round&&e.round!=="3rd-place-match");
+    const isFav=t=>fav&&!isPH(t.n)&&t.n.toLowerCase()===fav.toLowerCase();
+    let pool=fav?evs.filter(e=>e.teams.some(isFav)):[]; const favPath=pool.length>0;
+    if(!favPath) pool=evs;                          // no favorite match yet → any knockout fixture
+    if(lbl) lbl.textContent = favPath?`Next up · ${flag(fav)}${esc(fav)}'s path`:"Next up · Knockouts";
+    if(!pool.length){ el.innerHTML=`<div class="err">Knockout fixtures load once the bracket is set after the group stage.</div>`; return; }
+    const live=pool.find(e=>e.state==="in");
+    const up=pool.filter(e=>e.state==="pre").sort((a,b)=>new Date(a.date)-new Date(b.date));
+    const past=pool.filter(e=>e.state==="post").sort((a,b)=>new Date(b.date)-new Date(a.date));
+    const m=live||up[0]||past[0];
+    const RND={"round-of-32":"Round of 32","round-of-16":"Round of 16","quarterfinals":"Quarterfinal","semifinals":"Semifinal","final":"Final"};
+    const nm=t=>isPH(t.n)?`<span style="color:var(--muted)">${esc(shortPH(t.n))}</span>`:`${flag(t.n)}${A(t.link,esc(t.n))}`;
+    const [t1,t2]=m.teams, score=m.state==="pre"?"":`${esc(t1.s)}–${esc(t2.s)}`;
+    const line=m.state==="in"?A(WATCH,"▶ "+esc(score)+" · "+esc(m.detail))
+             :m.state==="post"?A(m.link,esc(score)+" · FT"):A(m.link,fmtKO(m.date));
+    el.innerHTML=`<div class="match" style="align-items:flex-start">
+      <span class="tm"><b>${nm(t1)} <span style="color:var(--muted)">v</span> ${nm(t2)}</b>
+        <div style="font-size:12px;color:var(--muted);margin-top:2px">${RND[m.round]||"Knockout"}${m.venue?" · "+esc(m.venue):""}</div></span>
+      <span class="st ${m.state==='in'?'liv':m.state==='post'?'fin':'pre'}" style="width:auto;text-align:right;white-space:nowrap">${line}</span></div>
+      <div class="legend" style="margin-top:8px">${favPath?`Tracking the title favorite — ${flag(fav)}${esc(fav)}'s next knockout match.`:"The next knockout fixture on the calendar."}</div>`;
+    return;
+  }
   if(nextInfo===undefined) return;                 // still loading
   if(!nextInfo){el.innerHTML=`<div class="err">Round-of-32 matchup is set once the bracket fills in — check back after the group stage.</div>`;return;}
   const N=nextInfo;

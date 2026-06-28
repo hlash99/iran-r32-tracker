@@ -57,11 +57,18 @@ function compute(groups, matches) {
   const iran = groups.flatMap(g => g.teams).find(t => t.team === IRAN);
   if (!iran) throw new Error("Iran not in feed");
   const teamGroup = {}; groups.forEach(g => g.teams.forEach(t => teamGroup[t.team] = g.group));
-  const pendGroups = new Set(groups.filter(g => g.teams.some(t => t.P < 3)).map(g => g.group));
+  // A group is final only when its matches have actually ended. ESPN bumps gamesPlayed (and
+  // provisional points) the moment a match kicks off, so judging "done" on P>=3 alone would mark a
+  // still-live group final at half-time and snap the odds to 100/0 prematurely. Keep any group with
+  // a live match pending so the Monte-Carlo simulates its remaining minutes. (Mirrors the page.)
+  // only a live GROUP-STAGE match counts (both teams in the same group); knockout games are inter-group
+  const liveGroups = new Set(); matches.forEach(m => { if (m.state === "in") { const gh = teamGroup[m.home], ga = teamGroup[m.away]; if (gh && gh === ga) liveGroups.add(gh); } });
+  const groupDone = g => g.teams.every(x => x.P >= 3) && !liveGroups.has(g.group);
+  const pendGroups = new Set(groups.filter(g => !groupDone(g)).map(g => g.group));
   const matchByGroup = {}; matches.forEach(m => { const gp = teamGroup[m.home]; if (gp) (matchByGroup[gp] = matchByGroup[gp] || []).push(m); });
   const strength = {}; groups.forEach(g => g.teams.forEach(t => { const p = Math.max(1, t.P); strength[t.team] = t.pts / p + 0.3 * t.gd / p; }));
 
-  const thirds = groups.map(g => ({ group: g.group, t: thirdOf(g), done: g.teams.every(x => x.P >= 3) }));
+  const thirds = groups.map(g => ({ group: g.group, t: thirdOf(g), done: groupDone(g) }));
   const ranked = thirds.slice().sort((a, b) => b.t.pts - a.t.pts || b.t.gd - a.t.gd || b.t.gf - a.t.gf);
   const iranPos = ranked.findIndex(r => r.t.team === IRAN) + 1;
   const pending = thirds.filter(r => !r.done).map(r => r.group);
