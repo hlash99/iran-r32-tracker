@@ -1,5 +1,5 @@
 {
-  "updated": "2026-06-28T06:16:02Z",
+  "updated": "2026-06-28T09:35:32Z",
   "team": "Iran",
   "group": "G",
   "status": "3rd in Group G · 3 pts · 0 GD · 3 GF — chasing a best-third spot",
@@ -10,7 +10,7 @@
   "live": true,
   "source": "ESPN public feed (standings + scoreboard); recomputed server-side by scripts/snapshot.mjs",
   "note": "The page computes Iran's advancement probability live from the real group tables via Monte-Carlo of the remaining matches. baseline_pct is a recent snapshot for the dashboard card; the live page recomputes continuously.",
-  "server_updated": "2026-06-28T06:16:02Z",
+  "server_updated": "2026-06-28T09:35:32Z",
   "iran_pct": 0,
   "iran_pos": 9,
   "iran_status": "eliminated",
@@ -20,6 +20,6 @@
   "favorite": "France",
   "favorite_pct": 21,
   "iran_pct_raw": 0,
-  "favorite_pct_model": 18,
+  "favorite_pct_model": 17,
   "favorite_pct_market": 22
 }
