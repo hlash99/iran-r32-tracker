@@ -1,5 +1,5 @@
 {
-  "updated": "2026-06-28T20:46:43Z",
+  "updated": "2026-06-28T20:58:59Z",
   "team": "Iran",
   "group": "G",
   "status": "3rd in Group G · 3 pts · 0 GD · 3 GF — chasing a best-third spot",
@@ -10,7 +10,7 @@
   "live": true,
   "source": "ESPN public feed (standings + scoreboard); recomputed server-side by scripts/snapshot.mjs",
   "note": "The page computes Iran's advancement probability live from the real group tables via Monte-Carlo of the remaining matches. baseline_pct is a recent snapshot for the dashboard card; the live page recomputes continuously.",
-  "server_updated": "2026-06-28T20:46:43Z",
+  "server_updated": "2026-06-28T20:58:59Z",
   "iran_pct": 0,
   "iran_pos": 9,
   "iran_status": "eliminated",
@@ -18,21 +18,21 @@
   "next_kickoff": null,
   "next_confirmed": null,
   "favorite": "Spain",
-  "favorite_pct": 23,
+  "favorite_pct": 22,
   "iran_pct_raw": 0,
-  "favorite_pct_model": 21,
+  "favorite_pct_model": 20,
   "favorite_pct_market": 9,
   "contenders": [
     {
       "team": "Spain",
-      "pct": 23,
-      "pct_model": 21,
+      "pct": 22,
+      "pct_model": 20,
       "pct_market": 9
     },
     {
       "team": "Brazil",
       "pct": 14,
-      "pct_model": 13,
+      "pct_model": 14,
       "pct_market": 5
     },
     {
@@ -54,13 +54,13 @@
       "pct_market": 3
     },
     {
-      "team": "Switzerland",
+      "team": "Belgium",
       "pct": 4,
-      "pct_model": 6,
+      "pct_model": 5,
       "pct_market": 1
     },
     {
-      "team": "Belgium",
+      "team": "Switzerland",
       "pct": 4,
       "pct_model": 5,
       "pct_market": 1
@@ -116,11 +116,17 @@
     {
       "team": "Sweden",
       "pct": 1,
-      "pct_model": 2,
+      "pct_model": 1,
       "pct_market": 0
     },
     {
       "team": "Australia",
+      "pct": 1,
+      "pct_model": 1,
+      "pct_market": 0
+    },
+    {
+      "team": "Türkiye",
       "pct": 1,
       "pct_model": 1,
       "pct_market": 0
@@ -138,25 +144,19 @@
       "pct_market": 0
     },
     {
-      "team": "Türkiye",
-      "pct": 1,
-      "pct_model": 1,
-      "pct_market": 0
-    },
-    {
       "team": "Scotland",
       "pct": 1,
       "pct_model": 1,
       "pct_market": 0
     },
     {
-      "team": "South Korea",
+      "team": "Paraguay",
       "pct": 1,
       "pct_model": 1,
       "pct_market": 0
     },
     {
-      "team": "Paraguay",
+      "team": "Bosnia-Herzegovina",
       "pct": 1,
       "pct_model": 1,
       "pct_market": 0

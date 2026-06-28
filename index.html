@@ -240,10 +240,32 @@ const WATCH="https://www.youtube.com/@FOXOne/streams";   // FOX One YouTube live
 const IRAN="Iran", SLOTS=8, SIMS=100000;
 const ymd=d=>d.toISOString().slice(0,10).replace(/-/g,"");
 const scoreWindow=()=>`${ymd(new Date(Date.now()-864e5))}-${ymd(new Date(Date.now()+3*864e5))}`;  // rolling: yesterday → +3d
+// ── data sources ────────────────────────────────────────────────────────────────────────
+// Tried in order; the first that returns a usable, parsed payload wins. Each is an independent
+// fetch path so the site keeps working if one host/endpoint/format breaks: ESPN's JSON API on two
+// hosts, then ESPN's "core" CDN (a different JSON wrapper). The format-tolerant parsers above turn
+// any of them into the same shape. To add a brand-new vendor, push a {standings,scoreboard} adapter.
+const SOURCES=[
+  ...["site.api.espn.com","site.web.api.espn.com"].map(host=>({name:"espn:"+host,
+    standings:()=>fetch(`https://${host}/apis/v2/sports/soccer/${LEAGUE}/standings?season=${SEASON}`).then(r=>r.json()),
+    scoreboard:d=>fetch(`https://${host}/apis/site/v2/sports/soccer/${LEAGUE}/scoreboard?dates=${d}`).then(r=>r.json())})),
+  {name:"espn:cdn",
+    standings:()=>fetch(`https://cdn.espn.com/core/soccer/table?xhr=1&league=${LEAGUE}&season=${SEASON}`).then(r=>r.json()),
+    scoreboard:d=>fetch(`https://cdn.espn.com/core/soccer/scoreboard?xhr=1&league=${LEAGUE}&dates=${d}`).then(r=>r.json())},
+];
+let srcName="—";
+async function getStandings(){ for(const s of SOURCES){ try{ const g=parseStandings(await s.standings()); if(g.length){ srcName=s.name; return g; } }catch(_){} } return []; }
+async function getScoreboardJSON(dates){ for(const s of SOURCES){ try{ const j=await s.scoreboard(dates); if(findEvents(j).length) return j; }catch(_){} } return {events:[]}; }
+async function getScores(dates){ return parseScore(await getScoreboardJSON(dates)); }
 const esc=s=>(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/"/g,"&quot;");
 const A=(href,txt,cls)=>href?`<a href="${esc(href)}" target="_blank" rel="noopener"${cls?` class="${cls}"`:""}>${txt}</a>`:txt;
 const FLAG={"Algeria":"🇩🇿","Argentina":"🇦🇷","Australia":"🇦🇺","Austria":"🇦🇹","Belgium":"🇧🇪","Bosnia-Herzegovina":"🇧🇦","Brazil":"🇧🇷","Canada":"🇨🇦","Cape Verde":"🇨🇻","Colombia":"🇨🇴","Congo DR":"🇨🇩","Croatia":"🇭🇷","Curaçao":"🇨🇼","Czechia":"🇨🇿","Ecuador":"🇪🇨","Egypt":"🇪🇬","England":"🏴󠁧󠁢󠁥󠁮󠁧󠁿","France":"🇫🇷","Germany":"🇩🇪","Ghana":"🇬🇭","Haiti":"🇭🇹","Iran":"🇮🇷","Iraq":"🇮🇶","Ivory Coast":"🇨🇮","Japan":"🇯🇵","Jordan":"🇯🇴","Mexico":"🇲🇽","Morocco":"🇲🇦","Netherlands":"🇳🇱","New Zealand":"🇳🇿","Norway":"🇳🇴","Panama":"🇵🇦","Paraguay":"🇵🇾","Portugal":"🇵🇹","Qatar":"🇶🇦","Saudi Arabia":"🇸🇦","Scotland":"🏴󠁧󠁢󠁳󠁣󠁴󠁿","Senegal":"🇸🇳","South Africa":"🇿🇦","South Korea":"🇰🇷","Spain":"🇪🇸","Sweden":"🇸🇪","Switzerland":"🇨🇭","Tunisia":"🇹🇳","Türkiye":"🇹🇷","Turkey":"🇹🇷","United States":"🇺🇸","USA":"🇺🇸","Uruguay":"🇺🇾","Uzbekistan":"🇺🇿"};
 const flag=name=>FLAG[name]?FLAG[name]+" ":"";
+// the tab icon: Iran's flag while the page is Iran-centric, the predicted winner's flag otherwise
+let favEmoji="";
+function setFavicon(emoji){ if(emoji===favEmoji) return; favEmoji=emoji;
+  let l=document.querySelector("link[rel~=icon]"); if(!l){ l=document.createElement("link"); l.rel="icon"; document.head.appendChild(l); }
+  l.setAttribute("href",`data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y=".9em" font-size="92">${emoji}</text></svg>`); }
 let timer=null, lastStamp=0, feedOk=true, pendingLive=false, mcRun=0, nextInfo=undefined, iranState="live", KO=[], SRV=null, gamesLive=false, celebrated=false, deciderTxt={};
 
 /* live "grabbed Xs ago" badge — ticks every second, flags staleness */
@@ -255,39 +277,56 @@ function updateLiveBadge(){
   el.className="live"+(stale?" stale":"");
   if(dot)dot.className="dot"+(!stale&&pendingLive?" pulse":"");
   const ageTxt=age<1?"just now":age<60?age+"s ago":Math.floor(age/60)+"m "+(age%60)+"s ago";
-  txt.textContent=(feedOk?(stale?"STALE":"LIVE"):"FEED DOWN")+" · ESPN · grabbed "
+  txt.textContent=(feedOk?(stale?"STALE":"LIVE"):"FEED DOWN")+" · "+(srcName.split(":")[0]||"feed").toUpperCase()+" · grabbed "
     +new Date(lastStamp).toLocaleTimeString()+" · "+ageTxt;
 }
 setInterval(updateLiveBadge,1000);
 
-/* ── ESPN parsing ── */
+/* ── feed parsing (format-tolerant) ──────────────────────────────────────────────────────
+   Both parsers walk the JSON generically rather than assuming a fixed path, so they keep
+   working across ESPN's different wrappers (site API vs cdn "core") and survive future shape
+   changes: a standings table is any node with {standings:{entries:[…]}}; a fixtures list is the
+   first array whose items carry .competitions. New data sources only need to return one of
+   these somewhere in their payload. */
+function deepWalk(n,visit,d){ if(!n||typeof n!=="object"||d>9) return;
+  visit(n);
+  if(Array.isArray(n)){ for(const x of n) deepWalk(x,visit,d+1); return; }
+  for(const k in n){ const v=n[k]; if(v&&typeof v==="object") deepWalk(v,visit,d+1); } }
 function parseStandings(j){
-  const groups=[];
-  (function walk(n){ if(!n)return;
-    if(n.standings&&n.standings.entries){
+  const groups=[], seen=new Set();
+  deepWalk(j,n=>{
+    if(n.standings&&Array.isArray(n.standings.entries)&&!seen.has(n.name||n.standings.uid||n)){
+      seen.add(n.name||n.standings.uid||n);
       const teams=n.standings.entries.map(e=>{const s={};(e.stats||[]).forEach(x=>s[x.name]=x.value);
         return {team:e.team.displayName,P:s.gamesPlayed|0,pts:s.points|0,gd:s.pointDifferential|0,gf:s.pointsFor|0,
                 link:(e.team.links&&e.team.links[0]&&e.team.links[0].href)||null};});
-      groups.push({group:n.name,teams});
+      if(teams.length) groups.push({group:n.name||"Group",teams});
     }
-    (n.children||[]).forEach(walk);(n.groups||[]).forEach(walk);
-  })(j);
+  },0);
   return groups;
 }
+function findEvents(j){                       // first array of fixture objects, wherever ESPN nests it
+  if(Array.isArray(j&&j.events)) return j.events;
+  let out=null; deepWalk(j,n=>{ if(!out&&Array.isArray(n)&&n.length&&n[0]&&n[0].competitions) out=n; },0);
+  return out||[];
+}
 function parseScore(j){
-  return (j.events||[]).map(e=>{const c=e.competitions[0],st=e.status;
-    const cs=c.competitors;
+  return findEvents(j).map(e=>{ try{
+    const c=e.competitions&&e.competitions[0]; if(!c) return null;
+    const st=e.status||{}, cs=c.competitors||[];
     const home=cs.find(x=>x.homeAway==="home")||cs[0], away=cs.find(x=>x.homeAway==="away")||cs[1];
+    if(!home||!away||!home.team||!away.team) return null;
     const elink=((e.links&&(e.links.find(l=>l.rel&&l.rel.includes("summary"))||e.links[0]))||{}).href||null;
-    const ab=t=>t.abbreviation||t.shortDisplayName||t.displayName.slice(0,3).toUpperCase();
+    const ab=t=>t.abbreviation||t.shortDisplayName||(t.displayName||"").slice(0,3).toUpperCase();
+    const tp=st.type||{};
     return {home:home.team.displayName,away:away.team.displayName, date:e.date,
       habbr:ab(home.team),aabbr:ab(away.team),
       hs:+home.score||0,as:+away.score||0,
-      state:st.type.state, detail:st.type.shortDetail||st.type.detail,
+      state:tp.state, detail:tp.shortDetail||tp.detail,
       link:elink, hlink:(home.team.links&&home.team.links[0]&&home.team.links[0].href)||null,
       alink:(away.team.links&&away.team.links[0]&&away.team.links[0].href)||null,
-      min:st.type.state==="in"?(st.period>=2?45+(parseInt(st.displayClock)||0):(parseInt(st.displayClock)||0)):(st.type.state==="post"?90:0)};
-  });
+      min:tp.state==="in"?(st.period>=2?45+(parseInt(st.displayClock)||0):(parseInt(st.displayClock)||0)):(tp.state==="post"?90:0)};
+  }catch(_){ return null; } }).filter(Boolean);
 }
 
 /* ── group helpers ── */
@@ -701,6 +740,8 @@ function render(R,pct,dist){
   document.title = iranState==="in" ? "🇮🇷 Iran are THROUGH ✓"
     : (noIran||iranState==="out") ? (fv?`🏆 ${fv.favorite} ${fv.favorite_pct}% — WC favorite`:(noIran?"World Cup tracker":"Iran — eliminated"))
     : `Iran R32: ${Math.round(shown)}%`;
+  // tab icon: the predicted winner's flag once the page pivots to the title race; Iran's flag while Iran-centric
+  setFavicon(((noIran||iranState==="out")&&fv) ? (FLAG[fv.favorite]||"🏆") : "🇮🇷");
 
   // footer
   $("#foot").innerHTML=`Live group tables & scores from ESPN's public feed, pulled in your browser every 60s. Probability via ${SIMS.toLocaleString()}-run Monte-Carlo of the remaining group matches, then tempered toward betting-market consensus (Kalshi/Polymarket) so it isn't over-optimistic. The gauge snaps to 100% / 0% the instant Iran are mathematically clinched or eliminated — it doesn't wait for the final game.<br>
@@ -716,12 +757,12 @@ const isPH=n=>/third place|winner|group/i.test(n);
 const gSlot=n=>/^third place group/i.test(n)&&n.replace(/^third place group /i,"").split("/").map(s=>s.trim()).includes("G");
 async function fetchNext(){
   try{
-    const j=await fetch(SCORE(KO_RANGE)).then(r=>r.json());
-    const evs=(j.events||[]).map(e=>{const c=e.competitions[0];
-      return {round:e.season&&e.season.slug, date:e.date, venue:(c.venue&&c.venue.fullName)||"", state:e.status.type.state, detail:e.status.type.shortDetail||"",
+    const j=await getScoreboardJSON(KO_RANGE);
+    const evs=findEvents(j).map(e=>{const c=e.competitions&&e.competitions[0]; if(!c||!c.competitors) return null; const st=e.status||{},tp=st.type||{};
+      return {round:e.season&&e.season.slug, date:e.date, venue:(c.venue&&c.venue.fullName)||"", state:tp.state, detail:tp.shortDetail||"",
         link:((e.links&&(e.links.find(l=>l.rel&&l.rel.includes("summary"))||e.links[0]))||{}).href||null,
         teams:c.competitors.map(x=>({n:x.team.displayName,ab:x.team.abbreviation||x.team.displayName.slice(0,3).toUpperCase(),
-          s:x.score,w:x.winner===true,link:(x.team.links&&x.team.links[0]&&x.team.links[0].href)||null}))};});
+          s:x.score,w:x.winner===true,link:(x.team.links&&x.team.links[0]&&x.team.links[0].href)||null}))};}).filter(Boolean);
     KO=evs;
     let m=evs.find(e=>e.teams.some(t=>/^iran$/i.test(t.n))); const confirmed=!!m;
     if(!m) m=evs.find(e=>e.teams.some(t=>gSlot(t.n)));
@@ -828,9 +869,8 @@ function process(groups, matches, stamp, ok){
 /* ── fetch loop (with a last-good cache + data.json fallback so an ESPN change can't break the page) ── */
 async function refresh(){
   try{
-    const [stJ,sbJ]=await Promise.all([fetch(STAND).then(r=>r.json()), fetch(SCORE(scoreWindow())).then(r=>r.json())]);
-    const groups=parseStandings(stJ), matches=parseScore(sbJ);
-    if(!groups.length) throw new Error("unexpected feed shape");   // Iran needn't be present (e.g. Women's WC → title-tracker mode)
+    const [groups,matches]=await Promise.all([getStandings(), getScores(scoreWindow())]);   // tries every source in turn
+    if(!groups.length) throw new Error("all sources failed");   // Iran needn't be present (e.g. Women's WC → title-tracker mode)
     try{ localStorage.setItem("iranR32_cache:"+LEAGUE+":"+SEASON,JSON.stringify({stamp:Date.now(),groups,matches})); }catch(_){}
     process(groups, matches, Date.now(), true);
   }catch(e){

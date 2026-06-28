@@ -48,32 +48,54 @@ const ymd = d => d.toISOString().slice(0, 10).replace(/-/g, "");
 
 const pois = l => { let L = Math.exp(-l), k = 0, p = 1; do { k++; p *= Math.random(); } while (p > L); return k - 1; };
 
+// Format-tolerant parsers (mirror the page): walk the JSON for a standings table / fixtures array
+// wherever a source nests it, so ESPN shape changes or alternate sources degrade gracefully.
+function deepWalk(n, visit, d) { if (!n || typeof n !== "object" || d > 9) return;
+  visit(n);
+  if (Array.isArray(n)) { for (const x of n) deepWalk(x, visit, d + 1); return; }
+  for (const k in n) { const v = n[k]; if (v && typeof v === "object") deepWalk(v, visit, d + 1); } }
 function parseStandings(j) {
-  const groups = [];
-  (function walk(n) {
-    if (!n) return;
-    if (n.standings && n.standings.entries) {
+  const groups = [], seen = new Set();
+  deepWalk(j, n => {
+    if (n.standings && Array.isArray(n.standings.entries) && !seen.has(n.name || n.standings.uid || n)) {
+      seen.add(n.name || n.standings.uid || n);
       const teams = n.standings.entries.map(e => {
         const s = {}; (e.stats || []).forEach(x => s[x.name] = x.value);
         return { team: e.team.displayName, P: s.gamesPlayed | 0, pts: s.points | 0, gd: s.pointDifferential | 0, gf: s.pointsFor | 0 };
       });
-      groups.push({ group: n.name, teams });
+      if (teams.length) groups.push({ group: n.name || "Group", teams });
     }
-    (n.children || []).forEach(walk); (n.groups || []).forEach(walk);
-  })(j);
+  }, 0);
   return groups;
 }
+function findEvents(j) {
+  if (Array.isArray(j && j.events)) return j.events;
+  let out = null; deepWalk(j, n => { if (!out && Array.isArray(n) && n.length && n[0] && n[0].competitions) out = n; }, 0);
+  return out || [];
+}
 function parseScore(j) {
-  return (j.events || []).map(e => {
-    const c = e.competitions[0], st = e.status, cs = c.competitors;
+  return findEvents(j).map(e => { try {
+    const c = e.competitions && e.competitions[0]; if (!c) return null;
+    const st = e.status || {}, tp = st.type || {}, cs = c.competitors || [];
     const home = cs.find(x => x.homeAway === "home") || cs[0], away = cs.find(x => x.homeAway === "away") || cs[1];
+    if (!home || !away || !home.team || !away.team) return null;
     return {
       home: home.team.displayName, away: away.team.displayName, date: e.date,
-      hs: +home.score || 0, as: +away.score || 0, state: st.type.state,
-      min: st.type.state === "in" ? (st.period >= 2 ? 45 + (parseInt(st.displayClock) || 0) : (parseInt(st.displayClock) || 0)) : (st.type.state === "post" ? 90 : 0),
+      hs: +home.score || 0, as: +away.score || 0, state: tp.state,
+      min: tp.state === "in" ? (st.period >= 2 ? 45 + (parseInt(st.displayClock) || 0) : (parseInt(st.displayClock) || 0)) : (tp.state === "post" ? 90 : 0),
     };
-  });
+  } catch { return null; } }).filter(Boolean);
 }
+// data sources, tried in order (ESPN JSON API on two hosts, then the ESPN "core" CDN wrapper)
+const SOURCES = () => [
+  ...["site.api.espn.com", "site.web.api.espn.com"].map(host => ({
+    standings: () => fetch(`https://${host}/apis/v2/sports/soccer/${LEAGUE}/standings?season=${SEASON}`).then(r => r.json()),
+    scoreboard: d => fetch(`https://${host}/apis/site/v2/sports/soccer/${LEAGUE}/scoreboard?dates=${d}`).then(r => r.json()) })),
+  { standings: () => fetch(`https://cdn.espn.com/core/soccer/table?xhr=1&league=${LEAGUE}&season=${SEASON}`).then(r => r.json()),
+    scoreboard: d => fetch(`https://cdn.espn.com/core/soccer/scoreboard?xhr=1&league=${LEAGUE}&dates=${d}`).then(r => r.json()) },
+];
+async function getStandings() { for (const s of SOURCES()) { try { const g = parseStandings(await s.standings()); if (g.length) return g; } catch {} } return []; }
+async function getScoreboardJSON(dates) { for (const s of SOURCES()) { try { const j = await s.scoreboard(dates); if (findEvents(j).length) return j; } catch {} } return { events: [] }; }
 const rankTeams = ts => ts.slice().sort((a, b) => b.pts - a.pts || b.gd - a.gd || b.gf - a.gf);
 const thirdOf = g => rankTeams(g.teams)[2];
 const aboveIran = (t, ir) => (t.pts > ir.pts) || (t.pts === ir.pts && t.gd > ir.gd) || (t.pts === ir.pts && t.gd === ir.gd && t.gf > ir.gf);
@@ -148,12 +170,12 @@ function displayPct(R) {
 
 async function findNext() {
   try {
-    const j = await fetch(SCORE(`${SEASON}0601-${SEASON}0815`)).then(r => r.json());
-    const evs = (j.events || []).map(e => {
-      const c = e.competitions[0];
-      return { date: e.date, venue: (c.venue && c.venue.fullName) || "", state: e.status.type.state,
-        teams: c.competitors.map(x => x.team.displayName) };
-    });
+    const j = await getScoreboardJSON(`${SEASON}0601-${SEASON}0815`);
+    const evs = findEvents(j).map(e => {
+      const c = e.competitions && e.competitions[0]; if (!c) return null;
+      return { date: e.date, venue: (c.venue && c.venue.fullName) || "", state: (e.status && e.status.type && e.status.type.state),
+        teams: (c.competitors || []).map(x => x.team.displayName) };
+    }).filter(Boolean);
     let m = evs.find(e => e.teams.some(t => /^iran$/i.test(t))); const confirmed = !!m;
     if (!m) m = evs.find(e => e.teams.some(t => /^third place group/i.test(t) &&
       t.replace(/^third place group /i, "").split("/").map(s => s.trim()).includes("G")));
@@ -189,9 +211,10 @@ function teamRatings(groups) {
   return r;
 }
 async function computeFavorite(groups) {
-  let j; try { j = await fetch(SCORE(`${SEASON}0601-${SEASON}0815`)).then(r => r.json()); } catch { return null; }
+  let j; try { j = await getScoreboardJSON(`${SEASON}0601-${SEASON}0815`); } catch { return null; }
   const ph = t => /third place|winner|group/i.test(t);
-  const pairs = (j.events || [])
+  const pairs = findEvents(j)
+    .filter(e => e.competitions && e.competitions[0] && e.competitions[0].competitors)
     .map(e => ({ date: e.date, teams: e.competitions[0].competitors.map(x => x.team.displayName) }))
     .filter(e => e.teams.length === 2 && e.teams.every(t => !ph(t)))
     .sort((a, b) => new Date(a.date) - new Date(b.date))
@@ -267,15 +290,14 @@ async function main() {
 
   // rolling activity window — also covers the last group day's matches for the sim
   const win = `${ymd(new Date(Date.now() - 2 * 864e5))}-${ymd(new Date(Date.now() + 5 * 864e5))}`;
-  let stJ, sbJ;
+  let groups, sbJ;
   try {
-    [stJ, sbJ] = await Promise.all([fetch(STAND).then(r => r.json()), fetch(SCORE(win)).then(r => r.json())]);
+    [groups, sbJ] = await Promise.all([getStandings(), getScoreboardJSON(win)]);   // each tries every source in turn
   } catch (e) {
     console.error("fetch failed (transient):", e.message);   // keep last good data.json; fail the run so it's visible
     process.exit(1);
   }
-  const groups = parseStandings(stJ);
-  const events = sbJ.events || [];
+  const events = findEvents(sbJ);
   const hasTeam = groups.flatMap(g => g.teams).some(t => t.team === IRAN);
   const liveOrSoon = events.some(e => { const s = e.status?.type?.state; return s === "in" || s === "pre"; });
 
