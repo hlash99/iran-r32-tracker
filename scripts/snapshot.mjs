@@ -11,13 +11,38 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
-// Configurable so the same Action can be re-pointed at a future tournament
-// (e.g. LEAGUE=fifa.wwc SEASON=2027 TEAM=...) — it idles when its tournament isn't running.
-const LEAGUE = process.env.LEAGUE || "fifa.world";
-const SEASON = process.env.SEASON || "2026";
-const IRAN   = process.env.TEAM   || "Iran";
-const STAND = `https://site.api.espn.com/apis/v2/sports/soccer/${LEAGUE}/standings?season=${SEASON}`;
-const SCORE = d => `https://site.api.espn.com/apis/site/v2/sports/soccer/${LEAGUE}/scoreboard?dates=${d}`;
+const IRAN = process.env.TEAM || "Iran";
+// Target tournament is auto-resolved each run (men's fifa.world or women's fifa.wwc, whichever WC is
+// live/next) so the same Action keeps working for every future World Cup with no config changes.
+// Force a specific one with LEAGUE=fifa.wwc SEASON=2027 if ever needed.
+let LEAGUE = "fifa.world", SEASON = "2026", STAND, SCORE;
+function setTarget(league, season) {
+  LEAGUE = league; SEASON = String(season);
+  STAND = `https://site.api.espn.com/apis/v2/sports/soccer/${LEAGUE}/standings?season=${SEASON}`;
+  SCORE = d => `https://site.api.espn.com/apis/site/v2/sports/soccer/${LEAGUE}/scoreboard?dates=${d}`;
+}
+setTarget(LEAGUE, SEASON);
+// candidate WC years around now: men's every 4y from 2026, women's every 4y from 2023
+function cycleYears(base) { const y = new Date().getFullYear(), k = Math.round((y - base) / 4), out = [];
+  for (let i = -1; i < 3; i++) { const s = base + (k + i) * 4; if (s >= 2023 && !out.includes(s)) out.push(s); } return out; }
+async function probeTarget(league, season) {
+  try {
+    const j = await fetch(`https://site.api.espn.com/apis/site/v2/sports/soccer/${league}/scoreboard?dates=${season}0401-${season}0901`).then(r => r.json());
+    const ds = (j.events || []).map(e => +new Date(e.date)).filter(Boolean); if (!ds.length) return null;
+    const now = Date.now(), start = Math.min(...ds), end = Math.max(...ds);
+    const live = (j.events || []).some(e => e.status?.type?.state === "in");
+    const dist = now < start ? start - now : now > end ? now - end : 0;
+    return { league, season, live, score: (live ? 9e15 : 0) + (1e13 - dist) + (league === "fifa.world" ? 1 : 0) };
+  } catch { return null; }
+}
+async function resolveTarget() {
+  if (process.env.LEAGUE && process.env.SEASON) return { league: process.env.LEAGUE, season: process.env.SEASON };
+  const cands = [];
+  for (const s of cycleYears(2026)) cands.push(["fifa.world", s]);
+  for (const s of cycleYears(2023)) cands.push(["fifa.wwc", s]);
+  const res = (await Promise.all(cands.map(([l, s]) => probeTarget(l, s)))).filter(Boolean).sort((a, b) => b.score - a.score);
+  return res[0] ? { league: res[0].league, season: res[0].season } : { league: "fifa.world", season: "2026" };
+}
 const SLOTS = 8, SIMS = 80000;
 const ymd = d => d.toISOString().slice(0, 10).replace(/-/g, "");
 
@@ -55,7 +80,8 @@ const aboveIran = (t, ir) => (t.pts > ir.pts) || (t.pts === ir.pts && t.gd > ir.
 
 function compute(groups, matches) {
   const iran = groups.flatMap(g => g.teams).find(t => t.team === IRAN);
-  if (!iran) throw new Error("Iran not in feed");
+  // Iran not in this tournament (e.g. the Women's WC) → nothing to qualify; run as a title tracker only.
+  if (!iran) return { noIran: true, iran: null, iranPos: 0, pending: [], baseAbove: 0, clinched: false, eliminated: true, pct: 0, allFinal: true };
   const teamGroup = {}; groups.forEach(g => g.teams.forEach(t => teamGroup[t.team] = g.group));
   // A group is final only when its matches have actually ended. ESPN bumps gamesPlayed (and
   // provisional points) the moment a match kicks off, so judging "done" on P>=3 alone would mark a
@@ -122,7 +148,7 @@ function displayPct(R) {
 
 async function findNext() {
   try {
-    const j = await fetch(SCORE("20260628-20260704")).then(r => r.json());
+    const j = await fetch(SCORE(`${SEASON}0601-${SEASON}0815`)).then(r => r.json());
     const evs = (j.events || []).map(e => {
       const c = e.competitions[0];
       return { date: e.date, venue: (c.venue && c.venue.fullName) || "", state: e.status.type.state,
@@ -163,7 +189,7 @@ function teamRatings(groups) {
   return r;
 }
 async function computeFavorite(groups) {
-  let j; try { j = await fetch(SCORE("20260628-20260703")).then(r => r.json()); } catch { return null; }
+  let j; try { j = await fetch(SCORE(`${SEASON}0601-${SEASON}0815`)).then(r => r.json()); } catch { return null; }
   const ph = t => /third place|winner|group/i.test(t);
   const pairs = (j.events || [])
     .map(e => ({ date: e.date, teams: e.competitions[0].competitors.map(x => x.team.displayName) }))
@@ -236,6 +262,9 @@ function blendFavorite(favModel, market) {
 }
 
 async function main() {
+  // pick whichever World Cup is live/next (men's or women's, any season) before fetching
+  const tgt = await resolveTarget(); setTarget(tgt.league, tgt.season);
+
   // rolling activity window — also covers the last group day's matches for the sim
   const win = `${ymd(new Date(Date.now() - 2 * 864e5))}-${ymd(new Date(Date.now() + 5 * 864e5))}`;
   let stJ, sbJ;
@@ -251,30 +280,34 @@ async function main() {
   const liveOrSoon = events.some(e => { const s = e.status?.type?.state; return s === "in" || s === "pre"; });
 
   // Idle-gate: between tournaments (or if ESPN's shape changes) there's nothing to do — exit
-  // WITHOUT writing so no commit happens and the Action quietly self-quiesces. data.json is left intact.
-  if (!groups.length || !hasTeam || (!liveOrSoon && events.length === 0)) {
-    console.log(`idle — no active ${LEAGUE} ${SEASON} (groups=${groups.length}, ${IRAN}=${hasTeam}, events=${events.length}); leaving data.json unchanged.`);
+  // WITHOUT writing so no commit happens and the Action quietly self-quiesces. data.json is left
+  // intact. NOTE: Iran's absence is NOT idle — the Women's WC still gets tracked as a title race.
+  if (!groups.length || (!liveOrSoon && events.length === 0)) {
+    console.log(`idle — no active ${LEAGUE} ${SEASON} (groups=${groups.length}, events=${events.length}); leaving data.json unchanged.`);
     return;
   }
 
   const matches = parseScore(sbJ);
   const R = compute(groups, matches);
-  const next = R.allFinal && R.pct < 50 ? null : await findNext();
-  const status = R.clinched ? "advanced" : R.eliminated ? "eliminated"
+  const next = (R.noIran || (R.allFinal && R.pct < 50)) ? null : await findNext();
+  const status = R.noIran ? "absent"
+    : R.clinched ? "advanced" : R.eliminated ? "eliminated"
     : R.allFinal ? (R.pct >= 50 ? "advanced" : "eliminated") : "live";
-  const shown = Math.round(displayPct(R));   // calibrated, snaps to 100/0 when clinched/eliminated
-  const [favModel, market] = await Promise.all([computeFavorite(groups), fetchWinnerMarket()]);
-  const fav = blendFavorite(favModel, market);   // WC winner: model blended with Kalshi odds (null until R32 set)
+  const shown = R.noIran ? null : Math.round(displayPct(R));   // calibrated, snaps to 100/0 when clinched/eliminated
+  // Kalshi's winner market is men's-only (KXMENWORLDCUP); for the Women's WC fall back to model-only
+  const [favModel, market] = await Promise.all([computeFavorite(groups), LEAGUE === "fifa.world" ? fetchWinnerMarket() : null]);
+  const fav = blendFavorite(favModel, market);   // WC winner: model blended with market (null until R32 set)
 
   const prev = JSON.parse(readFileSync(join(ROOT, "data.json"), "utf8"));
   const out = {
     ...prev,
     updated: new Date().toISOString().replace(/\.\d+Z$/, "Z"),
     server_updated: new Date().toISOString().replace(/\.\d+Z$/, "Z"),
+    league: LEAGUE, season: SEASON, team: IRAN, team_in_field: hasTeam,
     iran_pct: shown,
     baseline_pct: shown,
-    iran_pct_raw: Math.round(R.pct),
-    iran_pos: R.iranPos,
+    iran_pct_raw: R.noIran ? null : Math.round(R.pct),
+    iran_pos: R.noIran ? null : R.iranPos,
     locked_above: R.baseAbove,
     pending_groups: R.pending.map(g => g.replace("Group ", "")),
     iran_status: status,
@@ -290,7 +323,7 @@ async function main() {
     source: "ESPN public feed (standings + scoreboard); recomputed server-side by scripts/snapshot.mjs",
   };
   writeFileSync(join(ROOT, "data.json"), JSON.stringify(out, null, 2) + "\n");
-  console.log(`Iran ${R.pct.toFixed(1)}% (pos ${R.iranPos}, ${R.pending.length} groups live, status=${status})`
+  console.log(`${LEAGUE} ${SEASON} · ${IRAN} ${R.noIran ? "not in field" : R.pct.toFixed(1) + "% (pos " + R.iranPos + ")"} · status=${status}`
     + (next ? ` · next: ${next.opponent}${next.confirmed ? " (confirmed)" : " (projected)"}` : "")
     + (fav ? ` · WC favorite: ${fav.favorite} ${fav.favorite_pct}%` : " · favorite: TBD (R32 not set)"));
 }

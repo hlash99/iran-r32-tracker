@@ -1,5 +1,5 @@
 {
-  "updated": "2026-06-28T20:35:02Z",
+  "updated": "2026-06-28T20:46:43Z",
   "team": "Iran",
   "group": "G",
   "status": "3rd in Group G · 3 pts · 0 GD · 3 GF — chasing a best-third spot",
@@ -10,132 +10,159 @@
   "live": true,
   "source": "ESPN public feed (standings + scoreboard); recomputed server-side by scripts/snapshot.mjs",
   "note": "The page computes Iran's advancement probability live from the real group tables via Monte-Carlo of the remaining matches. baseline_pct is a recent snapshot for the dashboard card; the live page recomputes continuously.",
-  "server_updated": "2026-06-28T20:35:02Z",
+  "server_updated": "2026-06-28T20:46:43Z",
   "iran_pct": 0,
   "iran_pos": 9,
   "iran_status": "eliminated",
   "next_opponent": null,
   "next_kickoff": null,
   "next_confirmed": null,
-  "favorite": "France",
-  "favorite_pct": 21,
+  "favorite": "Spain",
+  "favorite_pct": 23,
   "iran_pct_raw": 0,
-  "favorite_pct_model": 17,
-  "favorite_pct_market": 22,
+  "favorite_pct_model": 21,
+  "favorite_pct_market": 9,
   "contenders": [
     {
-      "team": "France",
-      "pct": 21,
-      "pct_model": 17,
-      "pct_market": 22
-    },
-    {
-      "team": "Argentina",
-      "pct": 20,
-      "pct_model": 20,
-      "pct_market": 19
-    },
-    {
       "team": "Spain",
-      "pct": 10,
-      "pct_model": 11,
-      "pct_market": 9
-    },
-    {
-      "team": "England",
-      "pct": 9,
-      "pct_model": 8,
+      "pct": 23,
+      "pct_model": 21,
       "pct_market": 9
     },
     {
       "team": "Brazil",
-      "pct": 7,
-      "pct_model": 8,
+      "pct": 14,
+      "pct_model": 13,
       "pct_market": 5
     },
     {
       "team": "Netherlands",
-      "pct": 6,
-      "pct_model": 5,
-      "pct_market": 5
-    },
-    {
-      "team": "Portugal",
-      "pct": 5,
-      "pct_model": 4,
+      "pct": 11,
+      "pct_model": 9,
       "pct_market": 6
     },
     {
       "team": "Germany",
-      "pct": 4,
-      "pct_model": 4,
+      "pct": 10,
+      "pct_model": 10,
       "pct_market": 3
     },
     {
       "team": "Mexico",
-      "pct": 3,
-      "pct_model": 3,
+      "pct": 9,
+      "pct_model": 8,
       "pct_market": 3
     },
     {
-      "team": "Colombia",
-      "pct": 3,
-      "pct_model": 2,
-      "pct_market": 2
+      "team": "Switzerland",
+      "pct": 4,
+      "pct_model": 6,
+      "pct_market": 1
     },
     {
       "team": "Belgium",
-      "pct": 2,
-      "pct_model": 3,
+      "pct": 4,
+      "pct_model": 5,
       "pct_market": 1
-    },
-    {
-      "team": "Switzerland",
-      "pct": 2,
-      "pct_model": 3,
-      "pct_market": 1
-    },
-    {
-      "team": "Norway",
-      "pct": 2,
-      "pct_model": 1,
-      "pct_market": 2
     },
     {
       "team": "Morocco",
-      "pct": 1,
-      "pct_model": 2,
-      "pct_market": 1
-    },
-    {
-      "team": "Japan",
-      "pct": 1,
-      "pct_model": 1,
+      "pct": 4,
+      "pct_model": 4,
       "pct_market": 1
     },
     {
       "team": "United States",
+      "pct": 3,
+      "pct_model": 4,
+      "pct_market": 0
+    },
+    {
+      "team": "Japan",
+      "pct": 2,
+      "pct_model": 2,
+      "pct_market": 1
+    },
+    {
+      "team": "Ivory Coast",
+      "pct": 2,
+      "pct_model": 2,
+      "pct_market": 0
+    },
+    {
+      "team": "Canada",
+      "pct": 2,
+      "pct_model": 2,
+      "pct_market": 0
+    },
+    {
+      "team": "Uruguay",
       "pct": 1,
       "pct_model": 2,
       "pct_market": 0
     },
     {
-      "team": "Congo DR",
+      "team": "Ecuador",
+      "pct": 1,
+      "pct_model": 1,
+      "pct_market": 0
+    },
+    {
+      "team": "Czechia",
       "pct": 1,
       "pct_model": 0,
       "pct_market": 1
     },
     {
-      "team": "Croatia",
+      "team": "Sweden",
+      "pct": 1,
+      "pct_model": 2,
+      "pct_market": 0
+    },
+    {
+      "team": "Australia",
       "pct": 1,
       "pct_model": 1,
       "pct_market": 0
     },
     {
-      "team": "Senegal",
+      "team": "Iran",
+      "pct": 1,
+      "pct_model": 1,
+      "pct_market": 0
+    },
+    {
+      "team": "Egypt",
+      "pct": 1,
+      "pct_model": 1,
+      "pct_market": 0
+    },
+    {
+      "team": "Türkiye",
+      "pct": 1,
+      "pct_model": 1,
+      "pct_market": 0
+    },
+    {
+      "team": "Scotland",
+      "pct": 1,
+      "pct_model": 1,
+      "pct_market": 0
+    },
+    {
+      "team": "South Korea",
+      "pct": 1,
+      "pct_model": 1,
+      "pct_market": 0
+    },
+    {
+      "team": "Paraguay",
       "pct": 1,
       "pct_model": 1,
       "pct_market": 0
     }
-  ]
+  ],
+  "league": "fifa.world",
+  "season": "2026",
+  "team_in_field": true
 }

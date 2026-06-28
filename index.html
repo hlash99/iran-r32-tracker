@@ -166,7 +166,7 @@
     </section>
 
     <section class="block" data-block="needs"><span class="grip" draggable="true" title="Drag to reorder">⠿</span>
-      <h2>What needs to happen</h2>
+      <h2 id="needsLabel">What needs to happen</h2>
       <div class="card" id="needsCard"><div class="err">loading…</div></div>
     </section>
 
@@ -197,10 +197,45 @@
 
 <script>
 const $=s=>document.querySelector(s);
-const LEAGUE="fifa.world", SEASON=2026;            // 2026 men's WC — swap LEAGUE/SEASON for a future tournament
-const STAND=`https://site.api.espn.com/apis/v2/sports/soccer/${LEAGUE}/standings?season=${SEASON}`;
-const SCORE=d=>`https://site.api.espn.com/apis/site/v2/sports/soccer/${LEAGUE}/scoreboard?dates=${d}`;
-const KO_RANGE="20260628-20260720";   // full knockout window (R32 → Final) for the bracket
+// ── tournament target ──────────────────────────────────────────────────────────────────
+// Auto-resolved at boot to whichever FIFA World Cup is live or next — men's (fifa.world) or
+// women's (fifa.wwc), any season. So the page keeps working for every future World Cup with no
+// edits: it tracks Iran while they're in the field, then pivots to the title race once they're
+// out (or from the start if Iran aren't in that tournament — e.g. the Women's WC). Override for
+// testing with ?league=fifa.wwc&season=2027 in the URL.
+let LEAGUE="fifa.world", SEASON=2026, STAND, SCORE, KO_RANGE;
+function setTarget(league,season){
+  LEAGUE=league; SEASON=+season;
+  STAND=`https://site.api.espn.com/apis/v2/sports/soccer/${LEAGUE}/standings?season=${SEASON}`;
+  SCORE=d=>`https://site.api.espn.com/apis/site/v2/sports/soccer/${LEAGUE}/scoreboard?dates=${d}`;
+  KO_RANGE=`${SEASON}0601-${SEASON}0815`;   // knockout window (R32→Final) for the bracket fetch
+}
+setTarget(LEAGUE,SEASON);                    // sensible default until resolveTarget() runs at boot
+// candidate (league,season) pairs around now: men's every 4y from 2026, women's every 4y from 2023
+function wcCycleYears(base){const y=new Date().getFullYear(),k=Math.round((y-base)/4),out=[];
+  for(let i=-1;i<3;i++){const s=base+(k+i)*4; if(s>=2023&&!out.includes(s))out.push(s);} return out;}
+function wcCandidates(){const c=[];
+  for(const s of wcCycleYears(2026)) c.push({league:"fifa.world",season:s});
+  for(const s of wcCycleYears(2023)) c.push({league:"fifa.wwc",season:s}); return c;}
+async function probeTarget(c){
+  try{
+    const j=await fetch(`https://site.api.espn.com/apis/site/v2/sports/soccer/${c.league}/scoreboard?dates=${c.season}0401-${c.season}0901`).then(r=>r.json());
+    const ds=(j.events||[]).map(e=>+new Date(e.date)).filter(Boolean); if(!ds.length) return null;
+    const now=Date.now(), start=Math.min(...ds), end=Math.max(...ds);
+    const live=(j.events||[]).some(e=>e.status&&e.status.type&&e.status.type.state==="in");
+    const dist=now<start?start-now:now>end?now-end:0;                  // 0 = tournament window contains now
+    return {...c, live, score:(live?9e15:0)+(1e13-dist)+(c.league==="fifa.world"?1:0)};  // live wins; else nearest; men's breaks ties
+  }catch(_){ return null; }
+}
+async function resolveTarget(){
+  const q=new URLSearchParams(location.search);
+  if(q.get("league")&&q.get("season")) return {league:q.get("league"),season:+q.get("season")};
+  try{const c=JSON.parse(localStorage.getItem("wcTarget")); if(c&&Date.now()-c.at<432e5) return c;}catch(_){}   // reuse for 12h
+  const res=(await Promise.all(wcCandidates().map(probeTarget))).filter(Boolean).sort((a,b)=>b.score-a.score);
+  const pick=res[0]?{league:res[0].league,season:res[0].season}:{league:"fifa.world",season:2026};
+  try{localStorage.setItem("wcTarget",JSON.stringify({...pick,at:Date.now()}));}catch(_){}
+  return pick;
+}
 const WATCH="https://www.youtube.com/@FOXOne/streams";   // FOX One YouTube live streams — live games link here
 const IRAN="Iran", SLOTS=8, SIMS=100000;
 const ymd=d=>d.toISOString().slice(0,10).replace(/-/g,"");
@@ -265,10 +300,15 @@ function pois(l){let L=Math.exp(-l),k=0,p=1;do{k++;p*=Math.random();}while(p>L);
 
 /* ── core compute ── */
 function compute(groups, matches){
-  const iran=groups.flatMap(g=>g.teams).find(t=>t.team===IRAN);
-  if(!iran) throw new Error("Iran not found in feed");
   // map each non-final match to its group
   const teamGroup={}; groups.forEach(g=>g.teams.forEach(t=>teamGroup[t.team]=g.group));
+  const matchByGroup0={}; matches.forEach(m=>{const gp=teamGroup[m.home]; if(gp){(matchByGroup0[gp]=matchByGroup0[gp]||[]).push(m);} });
+  const iran=groups.flatMap(g=>g.teams).find(t=>t.team===IRAN);
+  // Iran aren't in this tournament (e.g. the Women's WC) → no qualification to track; run as a pure
+  // title tracker (gauge/table/bracket follow the favorite), same as the post-elimination state.
+  if(!iran) return {noIran:true, iran:null, iranPos:0, ranked:[], pending:[], liveMatches:[],
+    matchByGroup:matchByGroup0, teamGroup, allMatches:matches, ip:0, igd:0, igf:0, PG:[],
+    baseAbove:0, clinched:false, eliminated:true, allFinal:true};
   // A group is only truly final when all its matches have actually ended. ESPN bumps gamesPlayed
   // (and provisional points/GD) the instant a match kicks off, so judging "done" on P>=3 alone used
   // to mark a still-live group final at half-time — locking in the partial score and snapping the
@@ -462,6 +502,10 @@ function condText(G, ip, igd, igf){
 /* "What needs to happen" box — one route per pending group, marked up live (✅ secured / ❌ gone / ⏳ in play) */
 function renderNeeds(R){
   const el=$("#needsCard"); if(!el) return;
+  const lbl=$("#needsLabel");
+  if(R.noIran){ if(lbl)lbl.textContent="Iran & this tournament";
+    el.innerHTML=`<div class="needhd">🇮🇷 Iran aren't in this World Cup — there's no qualification to track, so the page follows the title race instead.</div>`; return; }
+  if(lbl)lbl.textContent="What needs to happen";
   const rows=[], pend=new Set();
   for(const G of (R.PG||[])){
     pend.add(G.gp);
@@ -528,11 +572,19 @@ function render(R,pct,dist){
   const shown = displayPct(R,pct);
   const fav = (decided==="out" && SRV && SRV.favorite) ? SRV : null;
   if(fav){
-    // Iran out → the meter pivots to the World Cup title favorite (market-blended, computed server-side)
+    // Iran out (or not in this tournament) → the meter pivots to the World Cup title favorite
     setGauge(fav.favorite_pct, true, "🏆 "+esc(fav.favorite), ["0%","100%"]);
-    $("#verdict").innerHTML=`<p>🇮🇷 Iran were <b>eliminated</b> in the group stage — the meter now tracks the <b>World Cup title favorite</b>:</p>
+    const lead = R.noIran ? `🇮🇷 Iran didn't qualify for this World Cup — the meter tracks the <b>title favorite</b>:`
+                          : `🇮🇷 Iran were <b>eliminated</b> in the group stage — the meter now tracks the <b>World Cup title favorite</b>:`;
+    $("#verdict").innerHTML=`<p>${lead}</p>
       <p style="font-size:17px;margin:8px 0 2px"><b>${flag(fav.favorite)}${esc(fav.favorite)}</b> · <b style="color:var(--green)">${fav.favorite_pct}%</b> to win the World Cup</p>
       <div class="pills">${fav.favorite_pct_model!=null?`<span class="pill">model ${fav.favorite_pct_model}%</span>`:""}${fav.favorite_pct_market!=null?`<span class="pill">market ${fav.favorite_pct_market}%</span>`:""}<span class="pill">blended ${fav.favorite_pct}%</span></div>`;
+  } else if(R.noIran){
+    // Iran not in the field and the title odds haven't been computed yet (bracket not set)
+    if(!GG.built) buildGauge(); GG.tgt=0; GG.jit=0;
+    $("#gcap").innerHTML=`<div class="n" style="color:var(--muted)">—</div><div class="l">title odds load at R32</div>`;
+    $("#verdict").innerHTML=`<p>🇮🇷 Iran aren't in this World Cup. Once the group stage ends this becomes a live <b>title tracker</b> — favorite, odds and the knockout bracket.</p>
+      <div class="pills"><span class="pill">tracking the field</span></div>`;
   } else {
     const clinch = decided==="in"?"QUALIFIED ✓" : decided==="out"?"ELIMINATED" : null;
     setGauge(shown, !!decided, clinch, ["OUT","IN"]);
@@ -540,8 +592,9 @@ function render(R,pct,dist){
       : R.eliminated?`Iran are <b>out</b> — ${R.baseAbove} third-placed teams finished above them.`
       : R.allFinal?"All groups are final."
       : `Iran are out only if <b>all ${R.pending.length}</b> still-live group${R.pending.length>1?"s":""} (${R.pending.join(", ")}) produce a third better than Iran's record${R.pending.length>1?` — Iran clinch the moment any one of those groups doesn't`:""}.`;
-    $("#verdict").innerHTML=`<p>Iran finished Group G 3rd on <b>${ir.pts} pts · ${ir.gd>=0?"+":""}${ir.gd} GD · ${ir.gf} GF</b>, currently
-      <b>${R.iranPos}${["","st","nd","rd"][R.iranPos]||"th"}</b> of the 12 third-placed teams. ${note}</p>
+    const iranGrp=(R.teamGroup&&R.teamGroup[IRAN])?R.teamGroup[IRAN].replace("Group ","Group "):"their group";
+    $("#verdict").innerHTML=`<p>Iran sit 3rd in <b>${esc(iranGrp)}</b> on <b>${ir.pts} pts · ${ir.gd>=0?"+":""}${ir.gd} GD · ${ir.gf} GF</b>, currently
+      <b>${R.iranPos}${["","st","nd","rd"][R.iranPos]||"th"}</b> of the ${R.ranked.length} third-placed teams. ${note}</p>
       <div class="pills"><span class="pill"><b>${SLOTS}</b> thirds advance</span>
         <span class="pill"><b>${R.baseAbove}</b> locked above</span>
         <span class="pill"><b>${R.pending.length}</b> group${R.pending.length!==1?"s":""} live</span></div>`;
@@ -560,7 +613,10 @@ function render(R,pct,dist){
         <td>${i+1}</td><td>${flag(c.team)}${esc(c.team)}${top?' <span style="color:var(--muted);font-size:11px">favorite</span>':""}</td>
         <td><b>${c.pct}%</b></td><td style="color:var(--muted)">${c.pct_model!=null?c.pct_model+"%":"–"}</td>${hasMkt?`<td style="color:var(--muted)">${c.pct_market!=null?c.pct_market+"%":"–"}</td>`:""}</tr>`;}).join("");
     $("#tableCard").innerHTML=`<table><thead><tr><th>#</th><th>Team</th><th>Win</th><th>Model</th>${hasMkt?"<th>Market</th>":""}</tr></thead><tbody>${rows}</tbody></table>
-      <div class="legend" style="margin-top:8px">Chance to win the 2026 World Cup — bracket Monte-Carlo (form + FIFA-tier prior)${hasMkt?", blended 40/60 with Kalshi's live market":""}. Updated server-side every ~10 min.</div>`;
+      <div class="legend" style="margin-top:8px">Chance to win the ${SEASON} World Cup — bracket Monte-Carlo (form + FIFA-tier prior)${hasMkt?", blended 40/60 with Kalshi's live market":""}. Updated server-side every ~10 min.</div>`;
+  } else if(R.noIran){
+    $("#tableLabel").textContent="World Cup title odds — live leaderboard";
+    $("#tableCard").innerHTML=`<div class="err">Title odds appear once the Round-of-32 bracket is set after the group stage.</div>`;
   } else {
     $("#tableLabel").textContent="Best third-placed teams — live table (top 8 advance)";
     const rows=R.ranked.slice(0,10).map((r,i)=>{
@@ -627,19 +683,23 @@ function render(R,pct,dist){
   try{ renderNeeds(R); }catch(e){}
   if(iranState==="in" && !celebrated){ celebrated=true; try{ celebrate(); }catch(e){} }   // 🎉 Iran advance!
   // dynamic header (H1 + subtitle + tab title) — flips the moment Iran clinch/are eliminated, and pivots to the title favorite when out
-  const fv=(iranState==="out" && SRV && SRV.favorite)?SRV:null;
+  const fv=(iranState==="out" && SRV && SRV.favorite)?SRV:null, noIran=R.noIran;
   const h1 = iranState==="in" ? "Iran — Into the Round of 32 ✓"
+           : noIran ? (fv?"World Cup — Title Watch":"World Cup Tracker")
            : iranState==="out" ? (fv?"World Cup — Title Watch":"Iran — Out in the group stage")
            : "Iran — Round-of-32 Watch";
-  $("#h1").innerHTML=`<span class="flag">${iranState==="out"&&fv?"🏆":"🇮🇷"}</span> ${h1}`;
+  $("#h1").innerHTML=`<span class="flag">${(iranState==="out"&&fv)||(noIran&&fv)?"🏆":"🇮🇷"}</span> ${h1}`;
   $("#sub").innerHTML = iranState==="in"
       ? `Iran are <b>through to the Round of 32</b> — now tracking their knockout path, the bracket and live scores.`
+    : noIran
+      ? (fv?`🇮🇷 Iran aren't in this World Cup — the page is a live <b>title tracker</b>: the favorite (model blended with the betting markets), full odds table and the bracket.`
+           :`🇮🇷 Iran aren't in this World Cup — once the group stage ends this becomes a live title & knockout tracker.`)
     : iranState==="out"
       ? (fv?`🇮🇷 Iran were eliminated in the group stage. The meter now tracks the <b>live World Cup title favorite</b> — the model blended with the betting markets.`
            :`🇮🇷 Iran were eliminated in the group stage — this page is now a live World Cup knockout tracker.`)
       : `Live probability Iran advances as one of the <b>8 best third-placed teams</b> — computed in real time from the live group tables.`;
   document.title = iranState==="in" ? "🇮🇷 Iran are THROUGH ✓"
-    : iranState==="out" ? (fv?`🏆 ${fv.favorite} ${fv.favorite_pct}% — WC favorite`:"Iran — eliminated")
+    : (noIran||iranState==="out") ? (fv?`🏆 ${fv.favorite} ${fv.favorite_pct}% — WC favorite`:(noIran?"World Cup tracker":"Iran — eliminated"))
     : `Iran R32: ${Math.round(shown)}%`;
 
   // footer
@@ -770,14 +830,14 @@ async function refresh(){
   try{
     const [stJ,sbJ]=await Promise.all([fetch(STAND).then(r=>r.json()), fetch(SCORE(scoreWindow())).then(r=>r.json())]);
     const groups=parseStandings(stJ), matches=parseScore(sbJ);
-    if(!groups.length || !groups.flatMap(g=>g.teams).some(t=>t.team===IRAN)) throw new Error("unexpected feed shape");
-    try{ localStorage.setItem("iranR32_cache",JSON.stringify({stamp:Date.now(),groups,matches})); }catch(_){}
+    if(!groups.length) throw new Error("unexpected feed shape");   // Iran needn't be present (e.g. Women's WC → title-tracker mode)
+    try{ localStorage.setItem("iranR32_cache:"+LEAGUE+":"+SEASON,JSON.stringify({stamp:Date.now(),groups,matches})); }catch(_){}
     process(groups, matches, Date.now(), true);
   }catch(e){
     feedOk=false;
-    // 1) fall back to last-good cached feed (renders a full, if stale, page)
+    // 1) fall back to last-good cached feed for THIS tournament (renders a full, if stale, page)
     let used=false;
-    try{ const c=JSON.parse(localStorage.getItem("iranR32_cache"));
+    try{ const c=JSON.parse(localStorage.getItem("iranR32_cache:"+LEAGUE+":"+SEASON));
       if(c&&c.groups&&c.groups.length){ process(c.groups, c.matches, c.stamp, false); used=true; } }catch(_){}
     // 2) ultimate fallback: the server snapshot in data.json (at least the headline number)
     if(!used){ try{ const d=await fetch("data.json?_="+Date.now()).then(r=>r.json());
@@ -789,11 +849,15 @@ async function refresh(){
   }
 }
 /* adaptive polling: while any game is live, refresh every 15s so the meter tracks goals; otherwise every 60s */
-(async function refreshLoop(){ try{ await refresh(); }catch(e){} setTimeout(refreshLoop, gamesLive?15000:60000); })();
-(async function koLoop(){ try{ await fetchNext(); }catch(e){} setTimeout(koLoop, gamesLive?20000:60000); })();   // bracket/next-up scores keep pace too
+async function refreshLoop(){ try{ await refresh(); }catch(e){} setTimeout(refreshLoop, gamesLive?15000:60000); }
+async function koLoop(){ try{ await fetchNext(); }catch(e){} setTimeout(koLoop, gamesLive?20000:60000); }   // bracket/next-up scores keep pace too
 /* server snapshot (favorite + market-blended title odds, computed in the Action) — used when Iran are out */
 async function fetchServer(){ try{ const d=await fetch("data.json?_="+Date.now()).then(r=>r.json()); if(d&&typeof d==="object"){ SRV=d; if(iranState==="out") refresh(); } }catch(e){} }
-fetchServer(); setInterval(fetchServer,120000);
+/* boot: resolve which World Cup is live/next (men's or women's, any season) before polling */
+(async function boot(){
+  try{ const t=await resolveTarget(); setTarget(t.league,t.season); }catch(_){ setTarget("fifa.world",2026); }
+  refreshLoop(); koLoop(); fetchServer(); setInterval(fetchServer,120000);
+})();
 
 /* scale the knockout bracket to fit the card width — no horizontal scroll, any screen size */
 function fitBracket(){
