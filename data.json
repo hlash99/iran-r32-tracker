@@ -1,5 +1,5 @@
 {
-  "updated": "2026-06-28T21:37:28Z",
+  "updated": "2026-06-28T22:18:15Z",
   "team": "Iran",
   "group": "G",
   "status": "3rd in Group G · 3 pts · 0 GD · 3 GF — chasing a best-third spot",
@@ -10,7 +10,7 @@
   "live": true,
   "source": "ESPN public feed (standings + scoreboard); recomputed server-side by scripts/snapshot.mjs",
   "note": "The page computes Iran's advancement probability live from the real group tables via Monte-Carlo of the remaining matches. baseline_pct is a recent snapshot for the dashboard card; the live page recomputes continuously.",
-  "server_updated": "2026-06-28T21:37:28Z",
+  "server_updated": "2026-06-28T22:18:15Z",
   "iran_pct": 0,
   "iran_pos": 9,
   "iran_status": "eliminated",
@@ -32,14 +32,14 @@
     },
     {
       "team": "Brazil",
-      "pct": 15,
+      "pct": 14,
       "pct_model": 14,
       "pct_market": 5,
       "record": "2-1-0"
     },
     {
       "team": "Netherlands",
-      "pct": 12,
+      "pct": 11,
       "pct_model": 9,
       "pct_market": 5,
       "record": "2-1-0"
@@ -53,8 +53,8 @@
     },
     {
       "team": "Mexico",
-      "pct": 9,
-      "pct_model": 9,
+      "pct": 8,
+      "pct_model": 8,
       "pct_market": 3,
       "record": "3-0-0"
     },
@@ -66,13 +66,6 @@
       "record": "2-1-0"
     },
     {
-      "team": "Morocco",
-      "pct": 4,
-      "pct_model": 4,
-      "pct_market": 1,
-      "record": "2-1-0"
-    },
-    {
       "team": "Belgium",
       "pct": 4,
       "pct_model": 5,
@@ -80,9 +73,16 @@
       "record": "1-2-0"
     },
     {
+      "team": "Morocco",
+      "pct": 4,
+      "pct_model": 4,
+      "pct_market": 1,
+      "record": "2-1-0"
+    },
+    {
       "team": "United States",
       "pct": 3,
-      "pct_model": 5,
+      "pct_model": 4,
       "pct_market": 0,
       "record": "2-0-1"
     },
@@ -129,6 +129,13 @@
       "record": "0-1-2"
     },
     {
+      "team": "Sweden",
+      "pct": 1,
+      "pct_model": 2,
+      "pct_market": 0,
+      "record": "1-1-1"
+    },
+    {
       "team": "Iran",
       "pct": 1,
       "pct_model": 1,
@@ -136,11 +143,11 @@
       "record": "0-3-0"
     },
     {
-      "team": "Sweden",
+      "team": "Egypt",
       "pct": 1,
       "pct_model": 1,
       "pct_market": 0,
-      "record": "1-1-1"
+      "record": "1-2-0"
     },
     {
       "team": "Türkiye",
@@ -157,14 +164,14 @@
       "record": "1-1-1"
     },
     {
-      "team": "Egypt",
+      "team": "Scotland",
       "pct": 1,
       "pct_model": 1,
       "pct_market": 0,
-      "record": "1-2-0"
+      "record": "1-0-2"
     },
     {
-      "team": "Scotland",
+      "team": "South Korea",
       "pct": 1,
       "pct_model": 1,
       "pct_market": 0,
@@ -183,13 +190,6 @@
       "pct_model": 1,
       "pct_market": 0,
       "record": "1-1-1"
-    },
-    {
-      "team": "South Korea",
-      "pct": 1,
-      "pct_model": 1,
-      "pct_market": 0,
-      "record": "1-0-2"
     }
   ],
   "league": "fifa.world",
