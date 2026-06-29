@@ -975,7 +975,7 @@ function renderBracket(){
       ${col("final","Final","F","")}
       ${col("semifinals","SF","R","feeds fed")}${col("quarterfinals","QF","R","feeds fed pairs")}${col("round-of-16","R16","R","feeds fed pairs")}${col("round-of-32","R32","R","feeds pairs")}
     </div></div>
-    <div class="legend" style="margin-top:4px">Live from ESPN · <b style="color:var(--amber)">gold</b> = Iran's path · two halves meet at the Final · scores update in real time.</div>`;
+    <div class="legend" style="margin-top:4px">Live from ESPN · ${(iranState==="live"||iranState==="in")?`<b style="color:var(--amber)">gold</b> = Iran's path · `:""}two halves meet at the Final · scores update in real time.</div>`;
   requestAnimationFrame(fitBracket); setTimeout(fitBracket,180);
 }
 
