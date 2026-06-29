@@ -803,8 +803,10 @@ function render(R,pct,dist){
   $("#matchCard").innerHTML=board.slice(0,12).map(m=>{
     const gp=R.teamGroup[m.home], dec=gp&&pend.has(gp);
     const cl=m.state==="post"?"fin":m.state==="in"?"liv":"pre";
-    // score sits inline between the team names (pre-match shows a muted "v"); status stays at the right
-    const mid=m.state==="pre"?`<span style="color:var(--muted)">v</span>`:`<b class="msc">${A(m.link,`${m.hs}–${m.as}`)}</b>`;
+    // each team's score sits right after its own name (HOME 0 - AWAY 1); pre-match shows a muted "v"
+    const live=m.state!=="pre";
+    const hsc=live?` <b class="msc">${m.hs}</b>`:"", asc=live?` <b class="msc">${m.as}</b>`:"";
+    const sep=`<span style="color:var(--muted)">${live?"-":"v"}</span>`;
     const status=m.state==="in"?A(WATCH,"▶ "+esc(m.detail)):m.state==="post"?A(m.link,"FT"):A(m.link,kick(m));
     const tag=gp?gp.replace("Group ","").trim():(new Date(m.date)>Date.now()?"R32":"");
     // Per-match, while Iran's fate is undecided: the ideal result to root for + whether the current score matches it
@@ -827,7 +829,7 @@ function render(R,pct,dist){
     }
     return `<div class="match"${dec?' title="affects Iran"':''}>
       <span class="g">${esc(tag)}</span>
-      <span class="tm"><span class="teams">${flag(m.home)}${A(m.hlink,esc(m.habbr||m.home))} ${mid} ${flag(m.away)}${A(m.alink,esc(m.aabbr||m.away))}</span>${ideal}</span>
+      <span class="tm"><span class="teams">${flag(m.home)}${A(m.hlink,esc(m.habbr||m.home))}${hsc} ${sep} ${flag(m.away)}${A(m.alink,esc(m.aabbr||m.away))}${asc}</span>${ideal}</span>
       ${favChip}<span class="st ${cl}" style="width:auto;text-align:right">${status}</span></div>`;}).join("")
     || `<div class="err">No matches in the current window — the tournament may be between rounds.</div>`;
   iranState = R.clinched?"in" : R.eliminated?"out" : (R.allFinal?(pct>=50?"in":"out"):"live"); renderNext();
