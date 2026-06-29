@@ -1,5 +1,5 @@
 {
-  "updated": "2026-06-29T17:57:49Z",
+  "updated": "2026-06-29T20:04:53Z",
   "team": "Iran",
   "group": "G",
   "status": "3rd in Group G · 3 pts · 0 GD · 3 GF — chasing a best-third spot",
@@ -10,7 +10,7 @@
   "live": true,
   "source": "ESPN public feed (standings + scoreboard); recomputed server-side by scripts/snapshot.mjs",
   "note": "The page computes Iran's advancement probability live from the real group tables via Monte-Carlo of the remaining matches. baseline_pct is a recent snapshot for the dashboard card; the live page recomputes continuously.",
-  "server_updated": "2026-06-29T17:57:49Z",
+  "server_updated": "2026-06-29T20:04:53Z",
   "iran_pct": 0,
   "iran_pos": 9,
   "iran_status": "eliminated",
@@ -21,13 +21,13 @@
   "favorite_pct": 21,
   "iran_pct_raw": 0,
   "favorite_pct_model": 17,
-  "favorite_pct_market": 21,
+  "favorite_pct_market": 22,
   "contenders": [
     {
       "team": "France",
       "pct": 21,
       "pct_model": 17,
-      "pct_market": 21,
+      "pct_market": 22,
       "record": "3-0-0"
     },
     {
@@ -39,7 +39,7 @@
     },
     {
       "team": "Spain",
-      "pct": 10,
+      "pct": 11,
       "pct_model": 11,
       "pct_market": 9,
       "record": "2-1-0"
@@ -47,14 +47,21 @@
     {
       "team": "England",
       "pct": 9,
-      "pct_model": 8,
+      "pct_model": 7,
       "pct_market": 9,
+      "record": "2-1-0"
+    },
+    {
+      "team": "Brazil",
+      "pct": 7,
+      "pct_model": 8,
+      "pct_market": 6,
       "record": "2-1-0"
     },
     {
       "team": "Portugal",
       "pct": 6,
-      "pct_model": 4,
+      "pct_model": 5,
       "pct_market": 6,
       "record": "1-2-0"
     },
@@ -66,16 +73,9 @@
       "record": "2-1-0"
     },
     {
-      "team": "Brazil",
-      "pct": 5,
-      "pct_model": 8,
-      "pct_market": 3,
-      "record": "2-1-0"
-    },
-    {
       "team": "Germany",
       "pct": 4,
-      "pct_model": 5,
+      "pct_model": 4,
       "pct_market": 4,
       "record": "2-0-1"
     },
@@ -90,7 +90,7 @@
       "team": "Colombia",
       "pct": 3,
       "pct_model": 2,
-      "pct_market": 3,
+      "pct_market": 2,
       "record": "2-1-0"
     },
     {
@@ -109,17 +109,10 @@
     },
     {
       "team": "Norway",
-      "pct": 2,
+      "pct": 1,
       "pct_model": 1,
       "pct_market": 2,
       "record": "2-0-1"
-    },
-    {
-      "team": "Japan",
-      "pct": 2,
-      "pct_model": 1,
-      "pct_market": 2,
-      "record": "1-2-0"
     },
     {
       "team": "Morocco",
@@ -157,11 +150,11 @@
       "record": "2-0-1"
     },
     {
-      "team": "Senegal",
+      "team": "Japan",
       "pct": 1,
       "pct_model": 1,
       "pct_market": 0,
-      "record": "1-0-2"
+      "record": "1-2-0"
     }
   ],
   "league": "fifa.world",
