@@ -78,6 +78,7 @@
   .match .teams{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .match .ideal{margin-left:auto;flex:none;font-size:11px;color:var(--accent);white-space:nowrap;cursor:help;opacity:.92}
   .match .sc{font-weight:750;font-size:15px;min-width:46px;text-align:center}
+  .match .msc{font-weight:750;font-size:14.5px;font-variant-numeric:tabular-nums;padding:0 3px}
   .match .st{font-size:11px;width:78px;text-align:right;flex:none}
   .st.fin{color:var(--muted)} .st.liv{color:var(--amber);font-weight:600} .st.pre{color:var(--muted)}
   .needhd{font-size:13.5px;color:var(--muted);line-height:1.5;padding:2px 2px 4px}
@@ -683,9 +684,10 @@ function render(R,pct,dist){
   if(fav){
     // Iran out (or not in this tournament) → the meter pivots to the World Cup title favorite
     setGauge(fav.favorite_pct, true, "🏆 "+esc(fav.favorite), ["0%","100%"]);
-    const lead = R.noIran ? `🇮🇷 Iran didn't qualify for this World Cup — the meter tracks the <b>title favorite</b>:`
-                          : `🇮🇷 Iran were <b>eliminated</b> in the group stage — the meter now tracks the <b>World Cup title favorite</b>:`;
-    $("#verdict").innerHTML=`<p>${lead}</p>
+    // (No "Iran were eliminated" call-out — that's stale until the next World Cup. Just lead with the title race.)
+    const lead = R.noIran ? `🇮🇷 Iran aren't in this World Cup — the meter tracks the <b>title favorite</b>:`
+                          : `<b>World Cup title favorite</b>`;
+    $("#verdict").innerHTML=`<p style="color:var(--muted);margin:0">${lead}</p>
       <p style="font-size:17px;margin:8px 0 2px"><b>${flag(fav.favorite)}${esc(fav.favorite)}</b> · <b style="color:var(--green)">${fav.favorite_pct}%</b> to win the World Cup</p>
       <div class="pills">${fav.favorite_pct_model!=null?`<span class="pill">model ${fav.favorite_pct_model}%</span>`:""}${fav.favorite_pct_market!=null?`<span class="pill">market ${fav.favorite_pct_market}%</span>`:""}<span class="pill">blended ${fav.favorite_pct}%</span></div>`;
   } else if(R.noIran){
@@ -778,8 +780,8 @@ function render(R,pct,dist){
   $("#matchCard").innerHTML=board.slice(0,12).map(m=>{
     const gp=R.teamGroup[m.home], dec=gp&&pend.has(gp);
     const cl=m.state==="post"?"fin":m.state==="in"?"liv":"pre";
-    const scTxt=m.state==="pre"?"–":`${m.hs}–${m.as}`;
-    const sc=m.state==="pre"?"–":A(m.link,scTxt);
+    // score sits inline between the team names (pre-match shows a muted "v"); status stays at the right
+    const mid=m.state==="pre"?`<span style="color:var(--muted)">v</span>`:`<b class="msc">${A(m.link,`${m.hs}–${m.as}`)}</b>`;
     const status=m.state==="in"?A(WATCH,"▶ "+esc(m.detail)):m.state==="post"?A(m.link,"FT"):A(m.link,kick(m));
     const tag=gp?gp.replace("Group ","").trim():(new Date(m.date)>Date.now()?"R32":"");
     // Per-match, while Iran's fate is undecided: the ideal result to root for + whether the current score matches it
@@ -800,11 +802,15 @@ function render(R,pct,dist){
     }
     return `<div class="match"${dec?' title="affects Iran"':''}>
       <span class="g">${esc(tag)}</span>
-      <span class="tm"><span class="teams">${flag(m.home)}${A(m.hlink,esc(m.habbr||m.home))} <span style="color:var(--muted)">v</span> ${flag(m.away)}${A(m.alink,esc(m.aabbr||m.away))}</span>${ideal}</span>
-      <span class="sc">${sc}</span>${favChip}<span class="st ${cl}" style="width:auto;text-align:right">${status}</span></div>`;}).join("")
+      <span class="tm"><span class="teams">${flag(m.home)}${A(m.hlink,esc(m.habbr||m.home))} ${mid} ${flag(m.away)}${A(m.alink,esc(m.aabbr||m.away))}</span>${ideal}</span>
+      ${favChip}<span class="st ${cl}" style="width:auto;text-align:right">${status}</span></div>`;}).join("")
     || `<div class="err">No matches in the current window — the tournament may be between rounds.</div>`;
   iranState = R.clinched?"in" : R.eliminated?"out" : (R.allFinal?(pct>=50?"in":"out"):"live"); renderNext();
-  try{ renderNeeds(R); }catch(e){}
+  // "What needs to happen" only matters while Iran are still alive in the group stage. Hide it once
+  // they're out or not in the tournament — it comes back automatically when Iran return (future WCs).
+  const needsSec=document.querySelector('[data-block="needs"]');
+  if(needsSec) needsSec.style.display=(R.eliminated||R.noIran)?"none":"";
+  if(!(R.eliminated||R.noIran)){ try{ renderNeeds(R); }catch(e){} }
   if(iranState==="in" && !celebrated){ celebrated=true; try{ celebrate(); }catch(e){} }   // 🎉 Iran advance!
   // dynamic header (H1 + subtitle + tab title) — flips the moment Iran clinch/are eliminated, and pivots to the title favorite when out
   const fv=(iranState==="out" && SRV && SRV.favorite)?SRV:null, noIran=R.noIran;
@@ -821,8 +827,8 @@ function render(R,pct,dist){
       ? (fv?`🇮🇷 Iran aren't in this World Cup — the page is a live <b>title tracker</b>: the favorite (model blended with the betting markets), full odds table and the bracket.`
            :`🇮🇷 Iran aren't in this World Cup — once the group stage ends this becomes a live title & knockout tracker.`)
     : iranState==="out"
-      ? (fv?`🇮🇷 Iran were eliminated in the group stage. The meter now tracks the <b>live World Cup title favorite</b> — the model blended with the betting markets.`
-           :`🇮🇷 Iran were eliminated in the group stage — this page is now a live World Cup knockout tracker.`)
+      ? (fv?`Live <b>World Cup title tracker</b> — the favorite, full odds table and the bracket, model blended with the betting markets.`
+           :`Live World Cup knockout tracker.`)
     : Fs.bestSlots>0
       ? `Live probability Iran reach ${knockN} — by finishing top ${Fs.advancePerGroup} or among the <b>${Fs.bestSlots}</b> best ${ordS(Fs.advancePerGroup+1)}-placed teams — computed in real time.`
       : `Live probability Iran finish <b>top ${Fs.advancePerGroup}</b> of their group to reach ${knockN} — computed in real time from the live tables.`;
