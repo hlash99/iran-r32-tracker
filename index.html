@@ -77,6 +77,7 @@
   .match .tm{flex:1;font-size:13.5px;display:flex;align-items:center;gap:10px;min-width:0}
   .match .teams{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .match .ideal{margin-left:auto;flex:none;font-size:11px;color:var(--accent);white-space:nowrap;cursor:help;opacity:.92}
+  .match .ideal.pens{color:var(--amber)}
   .match .sc{font-weight:750;font-size:15px;min-width:46px;text-align:center}
   .match .msc{font-weight:750;font-size:14.5px;font-variant-numeric:tabular-nums;padding:0 3px}
   .match .st{font-size:11px;width:78px;text-align:right;flex:none}
@@ -320,9 +321,13 @@ function parseScore(j){
     const elink=((e.links&&(e.links.find(l=>l.rel&&l.rel.includes("summary"))||e.links[0]))||{}).href||null;
     const ab=t=>t.abbreviation||t.shortDisplayName||(t.displayName||"").slice(0,3).toUpperCase();
     const tp=st.type||{};
+    const slug=(e.season&&e.season.slug)||"";
+    const shoot=(home.shootoutScore!=null&&away.shootoutScore!=null)?{h:+home.shootoutScore,a:+away.shootoutScore}:null;
     return {home:home.team.displayName,away:away.team.displayName, date:e.date,
       habbr:ab(home.team),aabbr:ab(away.team),
       hs:+home.score||0,as:+away.score||0,
+      round:slug, ko:/round-of|quarter|semi|final/i.test(slug),
+      shoot, won:home.winner?"home":away.winner?"away":null,
       state:tp.state, detail:tp.shortDetail||tp.detail,
       link:elink, hlink:(home.team.links&&home.team.links[0]&&home.team.links[0].href)||null,
       alink:(away.team.links&&away.team.links[0]&&away.team.links[0].href)||null,
@@ -392,7 +397,7 @@ function compute(groups, matches){
   const groupDone=g=>g.teams.every(x=>x.P>=3)&&!liveGroups.has(g.group);
   const pendGroups=new Set(groups.filter(g=>!groupDone(g)).map(g=>g.group));
   const liveMatches=matches.filter(m=>teamGroup[m.home]&&pendGroups.has(teamGroup[m.home])&&m.state!=="post");
-  const matchByGroup={}; matches.forEach(m=>{const gp=teamGroup[m.home]; if(gp){(matchByGroup[gp]=matchByGroup[gp]||[]).push(m);} });
+  const matchByGroup={}; matches.forEach(m=>{if(m.ko)return; const gp=teamGroup[m.home]; if(gp){(matchByGroup[gp]=matchByGroup[gp]||[]).push(m);} });
 
   // strength proxy from current form (pts/game + 0.3*gd/game)
   const strength={}; groups.forEach(g=>g.teams.forEach(t=>{const p=Math.max(1,t.P); strength[t.team]=t.pts/p+0.3*t.gd/p;}));
@@ -800,15 +805,22 @@ function render(R,pct,dist){
   const FAVI={good:"▲ on track",bad:"▼ wrong way"},
         FAVT={good:"The current score in THIS game is a result Iran want (see the 🎯 hint).",
               bad:"The current score in THIS game is NOT what Iran want — they need the 🎯 result instead."};
+  const ROUNDSHORT={"round-of-32":"R32","round-of-16":"R16","quarterfinals":"QF","semifinals":"SF","final":"Final","3rd-place-match":"3rd"};
   $("#matchCard").innerHTML=board.slice(0,12).map(m=>{
-    const gp=R.teamGroup[m.home], dec=gp&&pend.has(gp);
+    const gp=R.teamGroup[m.home], dec=!m.ko && gp && pend.has(gp);
     const cl=m.state==="post"?"fin":m.state==="in"?"liv":"pre";
     // each team's score sits right after its own name (HOME 0 - AWAY 1); pre-match shows a muted "v"
     const live=m.state!=="pre";
     const hsc=live?` <b class="msc">${m.hs}</b>`:"", asc=live?` <b class="msc">${m.as}</b>`:"";
     const sep=`<span style="color:var(--muted)">${live?"-":"v"}</span>`;
-    const status=m.state==="in"?A(WATCH,"▶ "+esc(m.detail)):m.state==="post"?A(m.link,"FT"):A(m.link,kick(m));
-    const tag=gp?gp.replace("Group ","").trim():(new Date(m.date)>Date.now()?"R32":"");
+    // knockout: tag the round, mark "FT (pens)", bold the team that advanced, note the shootout score
+    const status=m.state==="in"?A(WATCH,"▶ "+esc(m.detail)):m.state==="post"?A(m.link,m.shoot?"FT (pens)":"FT"):A(m.link,kick(m));
+    const tag=m.ko?(ROUNDSHORT[m.round]||"KO"):(gp?gp.replace("Group ","").trim():(new Date(m.date)>Date.now()?"R32":""));
+    const winB=(side,html)=>(m.ko&&m.won===side)?`<b>${html}</b>`:html;   // bold the team that advanced
+    const hHTML=winB("home",`${flag(m.home)}${A(m.hlink,esc(m.habbr||m.home))}${hsc}`), aHTML=winB("away",`${flag(m.away)}${A(m.alink,esc(m.aabbr||m.away))}${asc}`);
+    let pens="";
+    if(m.shoot){ const wA=m.won==="home"?(m.habbr||m.home):(m.aabbr||m.away), wp=Math.max(m.shoot.h,m.shoot.a), lp=Math.min(m.shoot.h,m.shoot.a);
+      pens=`<span class="ideal pens" title="Decided on penalties">⚪ ${flag(m.won==="home"?m.home:m.away)}${esc(wA)} won ${wp}–${lp} pens</span>`; }
     // Per-match, while Iran's fate is undecided: the ideal result to root for + whether the current score matches it
     let ideal="", favChip="";
     if(!decided && dec && (m.state==="in"||m.state==="pre")){
@@ -829,7 +841,7 @@ function render(R,pct,dist){
     }
     return `<div class="match"${dec?' title="affects Iran"':''}>
       <span class="g">${esc(tag)}</span>
-      <span class="tm"><span class="teams">${flag(m.home)}${A(m.hlink,esc(m.habbr||m.home))}${hsc} ${sep} ${flag(m.away)}${A(m.alink,esc(m.aabbr||m.away))}${asc}</span>${ideal}</span>
+      <span class="tm"><span class="teams">${hHTML} ${sep} ${aHTML}</span>${pens||ideal}</span>
       ${favChip}<span class="st ${cl}" style="width:auto;text-align:right">${status}</span></div>`;}).join("")
     || `<div class="err">No matches in the current window — the tournament may be between rounds.</div>`;
   iranState = R.clinched?"in" : R.eliminated?"out" : (R.allFinal?(pct>=50?"in":"out"):"live"); renderNext();
