@@ -266,8 +266,11 @@ const flag=name=>FLAG[name]?FLAG[name]+" ":"";
 // the tab icon: Iran's flag while the page is Iran-centric, the predicted winner's flag otherwise
 let favEmoji="";
 function setFavicon(emoji){ if(emoji===favEmoji) return; favEmoji=emoji;
-  let l=document.querySelector("link[rel~=icon]"); if(!l){ l=document.createElement("link"); l.rel="icon"; document.head.appendChild(l); }
-  l.setAttribute("href",`data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y=".9em" font-size="92">${emoji}</text></svg>`); }
+  // browsers won't repaint the tab icon if we just mutate href — remove the old link(s) and add a fresh one
+  document.querySelectorAll("link[rel~=icon]").forEach(n=>n.remove());
+  const l=document.createElement("link"); l.rel="icon"; l.type="image/svg+xml";
+  l.setAttribute("href",`data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y=".9em" font-size="92">${emoji}</text></svg>`);
+  document.head.appendChild(l); }
 let timer=null, lastStamp=0, feedOk=true, pendingLive=false, mcRun=0, nextInfo=undefined, iranState="live", KO=[], SRV=null, gamesLive=false, celebrated=false, deciderTxt={};
 
 /* live "grabbed Xs ago" badge — ticks every second, flags staleness */
