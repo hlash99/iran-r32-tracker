@@ -819,8 +819,15 @@ function render(R,pct,dist){
     const winB=(side,html)=>(m.ko&&m.won===side)?`<b>${html}</b>`:html;   // bold the team that advanced
     const hHTML=winB("home",`${flag(m.home)}${A(m.hlink,esc(m.habbr||m.home))}${hsc}`), aHTML=winB("away",`${flag(m.away)}${A(m.alink,esc(m.aabbr||m.away))}${asc}`);
     let pens="";
-    if(m.shoot){ const wA=m.won==="home"?(m.habbr||m.home):(m.aabbr||m.away), wp=Math.max(m.shoot.h,m.shoot.a), lp=Math.min(m.shoot.h,m.shoot.a);
-      pens=`<span class="ideal pens" title="Decided on penalties">⚪ ${flag(m.won==="home"?m.home:m.away)}${esc(wA)} won ${wp}–${lp} pens</span>`; }
+    if(m.shoot){
+      if(m.state==="post" && m.won){   // decided — name the winner and the final shootout score
+        const wf=m.won==="home"?m.home:m.away, wA=m.won==="home"?(m.habbr||m.home):(m.aabbr||m.away);
+        const wp=Math.max(m.shoot.h,m.shoot.a), lp=Math.min(m.shoot.h,m.shoot.a);
+        pens=`<span class="ideal pens" title="Decided on penalties">⚪ ${flag(wf)}${esc(wA)} won ${wp}–${lp} pens</span>`;
+      } else {                          // shootout in progress — live running tally, no winner yet
+        pens=`<span class="ideal pens" title="Penalty shootout in progress (updates as kicks are taken)">⚪ pens ${m.shoot.h}–${m.shoot.a}</span>`;
+      }
+    }
     // Per-match, while Iran's fate is undecided: the ideal result to root for + whether the current score matches it
     let ideal="", favChip="";
     if(!decided && dec && (m.state==="in"||m.state==="pre")){
