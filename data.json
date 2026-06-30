@@ -1,5 +1,5 @@
 {
-  "updated": "2026-06-30T22:17:47Z",
+  "updated": "2026-06-30T23:40:00Z",
   "team": "Iran",
   "group": "G",
   "status": "3rd in Group G · 3 pts · 0 GD · 3 GF — chasing a best-third spot",
@@ -10,7 +10,7 @@
   "live": true,
   "source": "ESPN public feed (standings + scoreboard); recomputed server-side by scripts/snapshot.mjs",
   "note": "The page computes Iran's advancement probability live from the real group tables via Monte-Carlo of the remaining matches. baseline_pct is a recent snapshot for the dashboard card; the live page recomputes continuously.",
-  "server_updated": "2026-06-30T22:17:47Z",
+  "server_updated": "2026-06-30T23:40:00Z",
   "iran_pct": 0,
   "iran_pos": 9,
   "iran_status": "eliminated",
@@ -18,35 +18,35 @@
   "next_kickoff": null,
   "next_confirmed": null,
   "favorite": "France",
-  "favorite_pct": 25,
+  "favorite_pct": 28,
   "iran_pct_raw": 0,
-  "favorite_pct_model": 17,
-  "favorite_pct_market": 29,
+  "favorite_pct_model": 22,
+  "favorite_pct_market": 30,
   "contenders": [
     {
       "team": "France",
-      "pct": 25,
-      "pct_model": 17,
-      "pct_market": 29,
-      "record": "3-0-0"
+      "pct": 28,
+      "pct_model": 22,
+      "pct_market": 30,
+      "record": "4-0-0"
     },
     {
       "team": "Argentina",
-      "pct": 20,
-      "pct_model": 20,
-      "pct_market": 18,
+      "pct": 19,
+      "pct_model": 19,
+      "pct_market": 17,
       "record": "3-0-0"
     },
     {
       "team": "Spain",
-      "pct": 11,
+      "pct": 10,
       "pct_model": 11,
-      "pct_market": 9,
+      "pct_market": 10,
       "record": "2-1-0"
     },
     {
       "team": "Brazil",
-      "pct": 10,
+      "pct": 9,
       "pct_model": 13,
       "pct_market": 6,
       "record": "3-1-0"
@@ -82,14 +82,14 @@
     {
       "team": "Colombia",
       "pct": 3,
-      "pct_model": 3,
+      "pct_model": 2,
       "pct_market": 3,
       "record": "2-1-0"
     },
     {
       "team": "Norway",
       "pct": 2,
-      "pct_model": 2,
+      "pct_model": 1,
       "pct_market": 2,
       "record": "3-0-1"
     },
@@ -122,13 +122,6 @@
       "record": "2-0-1"
     },
     {
-      "team": "Croatia",
-      "pct": 1,
-      "pct_model": 1,
-      "pct_market": 0,
-      "record": "2-0-1"
-    },
-    {
       "team": "Congo DR",
       "pct": 1,
       "pct_model": 0,
@@ -136,11 +129,11 @@
       "record": "1-1-1"
     },
     {
-      "team": "Senegal",
+      "team": "Croatia",
       "pct": 1,
       "pct_model": 1,
       "pct_market": 0,
-      "record": "1-0-2"
+      "record": "2-0-1"
     }
   ],
   "league": "fifa.world",
